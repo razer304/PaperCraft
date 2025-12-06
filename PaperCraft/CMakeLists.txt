@@ -8,7 +8,11 @@ set(CMAKE_CXX_STANDARD 17)
 # These will be resolved automatically if you configured VS with vcpkg toolchain
 find_package(glfw3 CONFIG REQUIRED)
 find_package(OpenGL REQUIRED)
-find_package(glad CONFIG REQUIRED)   # optional if you installed glad via vcpkg
+find_package(glad CONFIG REQUIRED)
+
+find_package(imgui CONFIG REQUIRED)
+
+
 
 # --- FBX SDK in external folder ---
 # Example: if you dropped Autodesk FBX SDK headers/libs into external/fbx
@@ -24,15 +28,16 @@ set_target_properties(fbx PROPERTIES
 #target_include_directories(fbx PUBLIC "external/FBX/include")
 
 # --- Your executable ---
-add_executable(PaperCraft
+add_executable(PaperCraftApp
     PaperCraft.cpp
 )
 
 # --- Link everything together ---
-target_link_libraries(PaperCraft
+target_link_libraries(PaperCraftApp
     PRIVATE
         glfw
         OpenGL::GL
         glad::glad          # only if using glad
         fbx
+        imgui::imgui
 )
