@@ -12,6 +12,9 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 
+#include "tinyfiledialogs.h"
+
+
 // -------------------- CALLBACKS --------------------
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     glViewport(0, 0, width, height);
@@ -75,7 +78,19 @@ void renderLoop(GLFWwindow* window) {
 
         // UI: Import FBX button
         if (ImGui::Button("Import FBX")) {
-            // TODO: open file dialog and load FBX
+            const char* filters[] = { "*.fbx" };
+            const char* file = tinyfd_openFileDialog(
+                "Choose FBX File",
+                "",
+                1,
+                filters,
+                nullptr,
+                0
+            );
+            if (file) {
+                std::cout << "Selected FBX: " << file << std::endl;
+                // TODO: load your FBX here 
+            } 
         }
 
         ImGui::Render();

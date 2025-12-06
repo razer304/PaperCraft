@@ -12,7 +12,7 @@ find_package(glad CONFIG REQUIRED)
 
 find_package(imgui CONFIG REQUIRED)
 
-
+find_package(tinyfiledialogs CONFIG REQUIRED)
 
 # --- FBX SDK in external folder ---
 # Example: if you dropped Autodesk FBX SDK headers/libs into external/fbx
@@ -40,4 +40,5 @@ target_link_libraries(PaperCraftApp
         glad::glad          # only if using glad
         fbx
         imgui::imgui
+        tinyfiledialogs::tinyfiledialogs
 )
