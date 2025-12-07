@@ -1,4 +1,0 @@
-C:/Users/razer/source/repos/PaperCraft/build/CMakeFiles/ALL_BUILD.dir
-C:/Users/razer/source/repos/PaperCraft/build/CMakeFiles/ZERO_CHECK.dir
-C:/Users/razer/source/repos/PaperCraft/build/PaperCraft/CMakeFiles/PaperCraftApp.dir
-C:/Users/razer/source/repos/PaperCraft/build/PaperCraft/CMakeFiles/ALL_BUILD.dir

@@ -14,15 +14,9 @@ find_package(imgui CONFIG REQUIRED)
 
 find_package(tinyfiledialogs CONFIG REQUIRED)
 
-# --- FBX SDK in external folder ---
-# Example: if you dropped Autodesk FBX SDK headers/libs into external/fbx
-add_library(fbx STATIC IMPORTED)
-set_target_properties(fbx PROPERTIES
-    IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/external/FBX/lib/x64/debug/libfbxsdk.lib"
-    INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/external/FBX/include"
-)
+find_package(assimp CONFIG REQUIRED)
 
-
+find_package(glm CONFIG REQUIRED)
 
 
 #target_include_directories(fbx PUBLIC "external/FBX/include")
@@ -38,7 +32,8 @@ target_link_libraries(PaperCraftApp
         glfw
         OpenGL::GL
         glad::glad          # only if using glad
-        fbx
         imgui::imgui
         tinyfiledialogs::tinyfiledialogs
+        assimp::assimp
+        glm::glm
 )
