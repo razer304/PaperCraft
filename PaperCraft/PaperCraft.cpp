@@ -20,7 +20,20 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <map>
+#include <tuple>   // for std::tie
 
+// Camera setup
+//glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
+//glm::vec3 cameraTarget = glm::vec3(0.0f, 0.0f, 0.0f);
+//glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
+
+//glm::mat4 view = glm::lookAt(cameraPos, cameraTarget, cameraUp);
+//glm::mat4 projection = glm::perspective(glm::radians(45.0f),
+//    800.0f / 600.0f, // aspect ratio
+//    0.1f, 100.0f);
+
+//glm::mat4 viewProjMatrix = projection * view;
 
 
 float gScale = 1.0f;
@@ -34,23 +47,90 @@ float gPanY = 0.0f;
 bool gPanning = false;
 double gLastPanX, gLastPanY;
 
-
+bool modelLoaded = false;
 
 unsigned int shaderProgram;
+
+//how much the mouse has moved to be considered a click or a drag
+const double CLICK_THRESHOLD = 5.0;
+
+double xstart;
+double ystart;
 
 
 // the shaders are at out/build/shaders/
 const char* vertexshaderpath = "shaders/vertex.glsl";
 const char* fragmentshaderpath = "shaders/fragment.glsl";
 
-
-
 struct Mesh {
     unsigned int VAO, VBO, EBO;
     unsigned int indexCount;
 };
 
+struct Edge {
+    glm::vec3 v1;
+	glm::vec3 v2;
+    bool cut = false;
+};
+
+std::vector<Edge> gEdgeList;
+
 Mesh gMesh;
+
+void buildEdges(const aiMesh* mesh) {
+    struct EdgeKey {
+        unsigned int v1, v2;
+        bool operator<(const EdgeKey& other) const {
+            return std::tie(v1, v2) < std::tie(other.v1, other.v2);
+        }
+    };
+
+    std::map<EdgeKey, std::vector<glm::vec3>> edgeNormals;
+
+    // compute normals per face
+    for (unsigned int i = 0; i < mesh->mNumFaces; i++) {
+        aiFace face = mesh->mFaces[i];
+        glm::vec3 v0(mesh->mVertices[face.mIndices[0]].x,
+            mesh->mVertices[face.mIndices[0]].y,
+            mesh->mVertices[face.mIndices[0]].z);
+        glm::vec3 v1(mesh->mVertices[face.mIndices[1]].x,
+            mesh->mVertices[face.mIndices[1]].y,
+            mesh->mVertices[face.mIndices[1]].z);
+        glm::vec3 v2(mesh->mVertices[face.mIndices[2]].x,
+            mesh->mVertices[face.mIndices[2]].y,
+            mesh->mVertices[face.mIndices[2]].z);
+
+        glm::vec3 normal = glm::normalize(glm::cross(v1 - v0, v2 - v0));
+
+        for (int e = 0; e < 3; e++) {
+            unsigned int a = face.mIndices[e];
+            unsigned int b = face.mIndices[(e + 1) % 3];
+            EdgeKey key{ std::min(a,b), std::max(a,b) };
+            edgeNormals[key].push_back(normal);
+        }
+    }
+
+    gEdgeList.clear();
+
+    // collect crease edges
+    for (auto& [key, normals] : edgeNormals) {
+        bool isFeature = false;
+        if (normals.size() == 1) isFeature = true; // boundary
+        else {
+            float dotp = glm::dot(normals[0], normals[1]);
+            if (dotp < 0.999f) isFeature = true; // not 180°
+        }
+        if (isFeature) {
+            glm::vec3 v1(mesh->mVertices[key.v1].x,
+                mesh->mVertices[key.v1].y,
+                mesh->mVertices[key.v1].z);
+            glm::vec3 v2(mesh->mVertices[key.v2].x,
+                mesh->mVertices[key.v2].y,
+                mesh->mVertices[key.v2].z);
+            gEdgeList.push_back({ v1, v2, false }); // default cut=false
+        }
+    }
+}
 
 Mesh loadMesh(const char* path) {
     Assimp::Importer importer;
@@ -82,6 +162,9 @@ Mesh loadMesh(const char* path) {
         }
     }
 
+    buildEdges(mesh);
+
+
     Mesh result;
     glGenVertexArrays(1, &result.VAO);
     glGenBuffers(1, &result.VBO);
@@ -97,6 +180,8 @@ Mesh loadMesh(const char* path) {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, result.EBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), indices.data(), GL_STATIC_DRAW);
 
+
+
     // Vertex attribute (position only)
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
@@ -104,6 +189,7 @@ Mesh loadMesh(const char* path) {
     glBindVertexArray(0);
 
     result.indexCount = indices.size();
+    modelLoaded = true;
     return result;
 }
 
@@ -118,9 +204,34 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
         if (action == GLFW_PRESS) {
             gDragging = true;
             glfwGetCursorPos(window, &gLastX, &gLastY);
+
+            xstart = gLastX;
+            ystart = gLastY;
+
+            
         }
         else if (action == GLFW_RELEASE) {
             gDragging = false;
+
+            double releaseX, releaseY;
+            glfwGetCursorPos(window, &releaseX, &releaseY);
+
+            double dx = releaseX - xstart;
+            double dy = releaseY - ystart;
+            double dist = sqrt(dx * dx + dy * dy);
+
+            //std::cout << "mouse distance: " << dist << std::endl;
+
+            if (dist < CLICK_THRESHOLD && modelLoaded) {
+                int picked = 0; 
+
+                std::cout << "gedgelist cut: " << picked << std::endl;
+                
+
+                gEdgeList[picked].cut = !gEdgeList[picked].cut;
+                // int picked = pickEdge(gLastX, gLastY, 800, 600, viewProjMatrix);
+            }
+
         }
     }
     if (button == GLFW_MOUSE_BUTTON_MIDDLE) {
@@ -155,6 +266,27 @@ void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
     }
 }
 
+int pickEdge(double mouseX, double mouseY, int screenWidth, int screenHeight, glm::mat4 viewProj) {
+    // Convert mouse coords to NDC
+    float ndcX = (2.0f * mouseX) / screenWidth - 1.0f;
+    float ndcY = 1.0f - (2.0f * mouseY) / screenHeight;
+
+    // Ray in clip space
+    glm::vec4 rayClip(ndcX, ndcY, -1.0f, 1.0f);
+
+    // Transform to world space
+    glm::vec4 rayEye = glm::inverse(viewProj) * rayClip;
+    rayEye = glm::vec4(rayEye.x, rayEye.y, -1.0f, 0.0f);
+    glm::vec3 rayWorld = glm::normalize(glm::vec3(rayEye));
+
+    // Test against each edge
+    for (int i = 0; i < gEdgeList.size(); i++) {
+        //float dist = distanceRayToSegment(cameraPos, rayWorld, gEdgeList[i].v1, gEdgeList[i].v2);
+		float dist = 0.0f; // placeholder
+        if (dist < 0.05f) return i; // threshold
+    }
+    return -1;
+}
 
 
 unsigned int compileShader(unsigned int type, const std::string& source) {
@@ -217,6 +349,43 @@ unsigned int createShaderProgram() {
 
     return program;
 }
+
+// Compute distance from point p to segment [a,b]
+float distanceRayToSegment(const glm::vec3& rayOrigin,
+    const glm::vec3& rayDir,
+    const glm::vec3& a,
+    const glm::vec3& b)
+{
+    glm::vec3 u = rayDir;
+    glm::vec3 v = b - a;
+    glm::vec3 w0 = rayOrigin - a;
+
+    float aDot = glm::dot(u, u);
+    float bDot = glm::dot(u, v);
+    float cDot = glm::dot(v, v);
+    float dDot = glm::dot(u, w0);
+    float eDot = glm::dot(v, w0);
+
+    float denom = aDot * cDot - bDot * bDot;
+    float sc, tc;
+
+    if (denom < 1e-6f) {
+        sc = 0.0f;
+        tc = (bDot > cDot ? dDot / bDot : eDot / cDot);
+    }
+    else {
+        sc = (bDot * eDot - cDot * dDot) / denom;
+        tc = (aDot * eDot - bDot * dDot) / denom;
+    }
+
+    tc = glm::clamp(tc, 0.0f, 1.0f); // clamp to segment
+
+    glm::vec3 pointOnRay = rayOrigin + sc * u;
+    glm::vec3 pointOnSeg = a + tc * v;
+
+    return glm::length(pointOnRay - pointOnSeg);
+}
+
 
 
 // -------------------- CALLBACKS --------------------
@@ -294,6 +463,7 @@ void renderLoop(GLFWwindow* window) {
             if (file) {
                 std::cout << "Selected 3D File: " << file << std::endl;
                 gMesh = loadMesh(file);
+                
             } 
         }
 
@@ -301,16 +471,16 @@ void renderLoop(GLFWwindow* window) {
 
         // Clear screen
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
 
         //render object
         //polygon
 
         glUseProgram(shaderProgram);
 
-        // Set color to black
         int colorLoc = glGetUniformLocation(shaderProgram, "uColor");
-        glUniform3f(colorLoc, 0.0f, 0.0f, 0.0f);
+        
 
         //transforms
         glUseProgram(shaderProgram);
@@ -320,15 +490,56 @@ void renderLoop(GLFWwindow* window) {
         model = glm::rotate(model, glm::radians(gYaw), glm::vec3(0.0f, 1.0f, 0.0f));
         model = glm::rotate(model, glm::radians(gPitch), glm::vec3(1.0f, 0.0f, 0.0f));
 
+
+        
+
         int modelLoc = glGetUniformLocation(shaderProgram, "uModel");
         glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
 
-        if (gMesh.VAO) {
-            glBindVertexArray(gMesh.VAO);
-            glDrawElements(GL_TRIANGLES, gMesh.indexCount, GL_UNSIGNED_INT, 0);
-            glBindVertexArray(0);
+        glEnable(GL_DEPTH_TEST);
+        glDepthFunc(GL_LESS);
+
+
+        // draw filled mesh (orange)
+        glUniform3f(colorLoc, 1.0f, 0.5f, 0.0f); // orange
+        glBindVertexArray(gMesh.VAO);
+        glDrawElements(GL_TRIANGLES, gMesh.indexCount, GL_UNSIGNED_INT, 0);
+
+        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+
+        // draw edges (black)
+        glLineWidth(5.0f);
+        for (int i = 0; i < gEdgeList.size(); i++) {
+            // Pick color based on cut flag
+            glm::vec3 color = gEdgeList[i].cut ? glm::vec3(1.0f, 0.0f, 0.0f)   // red if cut
+                : glm::vec3(0.0f, 0.0f, 0.0f);  // black otherwise
+            glUniform3fv(colorLoc, 1, glm::value_ptr(color));
+
+            // Two vertices for this edge
+            glm::vec3 verts[2] = { gEdgeList[i].v1, gEdgeList[i].v2 };
+
+            // Upload directly to GPU each frame
+            GLuint tempVBO, tempVAO;
+            glGenVertexArrays(1, &tempVAO);
+            glGenBuffers(1, &tempVBO);
+
+            glBindVertexArray(tempVAO);
+            glBindBuffer(GL_ARRAY_BUFFER, tempVBO);
+            glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_DYNAMIC_DRAW);
+
+            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+            glEnableVertexAttribArray(0);
+
+            // Draw the line
+            glDrawArrays(GL_LINES, 0, 2);
+
+            // Cleanup temporary objects
+            glDeleteBuffers(1, &tempVBO);
+            glDeleteVertexArrays(1, &tempVAO);
         }
 
+
+        glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
 
         // Reset polygon mode for ImGui (so UI isn’t wireframe)
 
