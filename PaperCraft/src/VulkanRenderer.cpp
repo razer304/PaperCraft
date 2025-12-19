@@ -30,8 +30,12 @@ void VulkanRenderer::initVulkan() {
         std::cout << "Init Vulkan " << std::endl;
     }
 
+
+
+
 	createInstance();
     setupDebugMessenger();
+	pickPhysicalDevice();
 
 }
 
@@ -250,4 +254,12 @@ void VulkanRenderer::populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreat
     createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
     createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
     createInfo.pfnUserCallback = debugCallback;
+}
+
+void VulkanRenderer::pickPhysicalDevice() {
+    if (enableValidationLayers) {
+        std::cout << "- pick  " << std::endl;
+    }
+
+
 }
