@@ -46,7 +46,7 @@ set(HEADERS
     src/Edge.h
 )
 
-add_executable(PaperCraftApp ${SOURCES} ${HEADERS})
+add_executable(PaperCraftApp ${SOURCES} ${HEADERS}  )
 
 
 

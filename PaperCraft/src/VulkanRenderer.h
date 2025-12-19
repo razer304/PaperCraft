@@ -44,8 +44,12 @@ private:
 
 	void pickPhysicalDevice();
 
+	bool isDeviceSuitable(VkPhysicalDevice device);
+
 	GLFWwindow* window;
 	VkInstance instance;
 	VkDebugUtilsMessengerEXT debugMessenger;
+	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+
 
 };
