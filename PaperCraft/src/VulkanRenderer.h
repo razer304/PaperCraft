@@ -5,6 +5,7 @@
 #include <iostream>
 #include <cstring>
 #include <map>
+#include <optional>
 
 
 class VulkanRenderer {
@@ -28,6 +29,16 @@ public:
 
 
 private:
+
+	struct QueueFamilyIndices {
+		std::optional<uint32_t> graphicsFamily;
+
+		bool isComplete() {
+			return graphicsFamily.has_value();
+		}
+	};
+
+
 	void initWindow();
     void initVulkan();
 	void mainLoop();
@@ -46,11 +57,20 @@ private:
 	void pickPhysicalDevice();
 
 	bool isDeviceSuitable(VkPhysicalDevice device);
+	int rateDeviceSuitability(VkPhysicalDevice device);
+
+	QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
+
+	void createLogicalDevice();
+
 
 	GLFWwindow* window;
 	VkInstance instance;
 	VkDebugUtilsMessengerEXT debugMessenger;
 	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+	VkDevice device;
+	VkQueue graphicsQueue;
+
 
 
 };
