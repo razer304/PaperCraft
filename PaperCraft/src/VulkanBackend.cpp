@@ -3,6 +3,9 @@
 
 
 void VulkanBackend::runVulkanBackend() {
+    if (enableValidationLayers) {
+        std::cout << "- runVulkanBackend " << std::endl;
+    }
 	initWindow();
     initVulkan();
     mainLoop();
@@ -18,13 +21,17 @@ void VulkanBackend::initWindow() {
     }
 	glfwInit();
 
-	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
     window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
+    glfwSetWindowUserPointer(window, this);
+    glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
+
 
 }
+
+
 
 void VulkanBackend::initVulkan() {
     if (enableValidationLayers) {
@@ -40,6 +47,10 @@ void VulkanBackend::initVulkan() {
     createImageViews();
     createRenderPass();
     createGraphicsPipeline();
+    createFramebuffers();
+    createCommandPool();
+    createCommandBuffers();
+    createSyncObjects();
 
 
 
@@ -51,7 +62,12 @@ void VulkanBackend::mainLoop() {
     }
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
+        drawFrame();
+
     }
+
+    vkDeviceWaitIdle(device);
+
 
 }
 
@@ -61,22 +77,26 @@ void VulkanBackend::cleanupVulkan() {
 		DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
     }
 
+    cleanupSwapChain();
+
     vkDestroyPipeline(device, graphicsPipeline, nullptr);
     vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+
     vkDestroyRenderPass(device, renderPass, nullptr);
 
-
-    for (auto imageView : swapChainImageViews) {
-        vkDestroyImageView(device, imageView, nullptr);
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);
+        vkDestroySemaphore(device, imageAvailableSemaphores[i], nullptr);
+        vkDestroyFence(device, inFlightFences[i], nullptr);
     }
 
-
-    vkDestroySwapchainKHR(device, swapChain, nullptr);
+    vkDestroyCommandPool(device, commandPool, nullptr);
 
     vkDestroyDevice(device, nullptr);
 
-    vkDestroySurfaceKHR(instance, surface, nullptr);
 
+
+    vkDestroySurfaceKHR(instance, surface, nullptr);
     vkDestroyInstance(instance, nullptr);
 
     glfwDestroyWindow(window);
@@ -87,6 +107,93 @@ void VulkanBackend::cleanupVulkan() {
 
 }
 
+void VulkanBackend::drawFrame() {
+
+    if (enableValidationLayers) {
+        std::cout << "- drawFrame " << currentFrame << std::endl;
+    }
+
+
+
+    vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
+
+    uint32_t imageIndex;
+    VkResult result = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized) {
+        framebufferResized = false;
+        recreateSwapChain();
+    }
+    else if (result != VK_SUCCESS) {
+        throw std::runtime_error("failed to acquire swap chain image!");
+    }
+
+    // Only reset the fence if we are submitting work
+    vkResetFences(device, 1, &inFlightFences[currentFrame]);
+
+
+
+    vkResetCommandBuffer(commandBuffers[currentFrame], 0);
+
+    recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
+
+
+
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+
+    VkSemaphore waitSemaphores[] = { imageAvailableSemaphores[currentFrame] };
+    VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+    submitInfo.waitSemaphoreCount = 1;
+    submitInfo.pWaitSemaphores = waitSemaphores;
+    submitInfo.pWaitDstStageMask = waitStages;
+
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &commandBuffers[currentFrame];
+
+    VkSemaphore signalSemaphores[] = { renderFinishedSemaphores[currentFrame] };
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.pSignalSemaphores = signalSemaphores;
+
+
+    
+
+
+    
+
+    
+
+    VkPresentInfoKHR presentInfo{};
+    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = signalSemaphores;
+
+    VkSwapchainKHR swapChains[] = { swapChain };
+    presentInfo.swapchainCount = 1;
+    presentInfo.pSwapchains = swapChains;
+    presentInfo.pImageIndices = &imageIndex;
+
+    presentInfo.pResults = nullptr; // Optional
+
+    if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFences[currentFrame]) != VK_SUCCESS) {
+        throw std::runtime_error("failed to submit draw command buffer!");
+    }
+
+
+    result = vkQueuePresentKHR(presentQueue, &presentInfo);
+
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+        recreateSwapChain();
+    }
+    else if (result != VK_SUCCESS) {
+        throw std::runtime_error("failed to present swap chain image!");
+    }
+
+    currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+
+}
 
 
 
@@ -94,8 +201,234 @@ void VulkanBackend::cleanupVulkan() {
 // InitVulkan helper functions
 
 
+void VulkanBackend::framebufferResizeCallback(GLFWwindow* window, int width, int height) {
+    auto app = reinterpret_cast<VulkanBackend*>(glfwGetWindowUserPointer(window));
+    app->framebufferResized = true;
+}
+
+
+
+void VulkanBackend::cleanupSwapChain() {
+
+    for (auto framebuffer : swapChainFramebuffers) {
+        vkDestroyFramebuffer(device, framebuffer, nullptr);
+    }
+
+    for (auto imageView : swapChainImageViews) {
+        vkDestroyImageView(device, imageView, nullptr);
+    }
+
+    vkDestroySwapchainKHR(device, swapChain, nullptr);
+
+
+
+}
+
+void VulkanBackend::recreateSwapChain() {
+
+    int width = 0, height = 0;
+    glfwGetFramebufferSize(window, &width, &height);
+    while (width == 0 || height == 0) {
+        glfwGetFramebufferSize(window, &width, &height);
+        glfwWaitEvents();
+    }
+
+    vkDeviceWaitIdle(device);
+
+    cleanupSwapChain();
+
+    createSwapChain();
+    createImageViews();
+    createFramebuffers();
+}
+
+
+
+void VulkanBackend::createSyncObjects() {
+
+    if (enableValidationLayers) {
+        std::cout << "- createSyncObjects " << std::endl;
+    }
+
+
+    imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+    renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+    inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+
+
+
+    VkSemaphoreCreateInfo semaphoreInfo{};
+    semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+    VkFenceCreateInfo fenceInfo{};
+    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphores[i]) != VK_SUCCESS ||
+            vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphores[i]) != VK_SUCCESS ||
+            vkCreateFence(device, &fenceInfo, nullptr, &inFlightFences[i]) != VK_SUCCESS) {
+
+            throw std::runtime_error("failed to create synchronization objects for a frame!");
+        }
+    }
+
+
+
+}
+
+
+
+
+
+void VulkanBackend::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
+
+    if (enableValidationLayers) {
+        std::cout << "- recordCommandBuffer " << std::endl;
+    }
+
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = 0; // Optional
+    beginInfo.pInheritanceInfo = nullptr; // Optional
+
+    if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
+        throw std::runtime_error("failed to begin recording command buffer!");
+    }
+
+
+
+    VkRenderPassBeginInfo renderPassInfo{};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderPassInfo.renderPass = renderPass;
+    renderPassInfo.framebuffer = swapChainFramebuffers[imageIndex];
+    renderPassInfo.renderArea.offset = { 0, 0 };
+    renderPassInfo.renderArea.extent = swapChainExtent;
+
+    VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
+    renderPassInfo.clearValueCount = 1;
+    renderPassInfo.pClearValues = &clearColor;
+
+    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+
+
+
+
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = static_cast<float>(swapChainExtent.width);
+    viewport.height = static_cast<float>(swapChainExtent.height);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+    VkRect2D scissor{};
+    scissor.offset = { 0, 0 };
+    scissor.extent = swapChainExtent;
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+    vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+
+    vkCmdEndRenderPass(commandBuffer);
+
+
+    if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
+        throw std::runtime_error("failed to record command buffer!");
+    }
+
+
+
+}
+
+
+void VulkanBackend::createCommandBuffers() {
+
+    if (enableValidationLayers) {
+        std::cout << "- createCommandBuffer " << std::endl;
+    }
+
+    commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+
+
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.commandPool = commandPool;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandBufferCount = (uint32_t)commandBuffers.size();
+
+
+
+    if (vkAllocateCommandBuffers(device, &allocInfo, commandBuffers.data()) != VK_SUCCESS) {
+        throw std::runtime_error("failed to allocate command buffers!");
+    }
+}
+
+
+
+void VulkanBackend::createCommandPool() {
+
+    if (enableValidationLayers) {
+        std::cout << "- createCommandPool " << std::endl;
+    }
+
+
+    QueueFamilyIndices queueFamilyIndices = findQueueFamilies(physicalDevice);
+
+    VkCommandPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
+
+
+    if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create command pool!");
+    }
+}
+
+
+void VulkanBackend::createFramebuffers() {
+
+    if (enableValidationLayers) {
+        std::cout << "- createFramebuffers " << std::endl;
+    }
+
+
+
+    swapChainFramebuffers.resize(swapChainImageViews.size());
+
+    for (size_t i = 0; i < swapChainImageViews.size(); i++) {
+        VkImageView attachments[] = {
+            swapChainImageViews[i]
+        };
+
+        VkFramebufferCreateInfo framebufferInfo{};
+        framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        framebufferInfo.renderPass = renderPass;
+        framebufferInfo.attachmentCount = 1;
+        framebufferInfo.pAttachments = attachments;
+        framebufferInfo.width = swapChainExtent.width;
+        framebufferInfo.height = swapChainExtent.height;
+        framebufferInfo.layers = 1;
+
+        if (vkCreateFramebuffer(device, &framebufferInfo, nullptr, &swapChainFramebuffers[i]) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create framebuffer!");
+        }
+    }
+
+
+
+}
+
 
 void VulkanBackend::createRenderPass() {
+
+    if (enableValidationLayers) {
+        std::cout << "- createRenderPass " << std::endl;
+    }
+
 
     VkAttachmentDescription colorAttachment{};
     colorAttachment.format = swapChainImageFormat;
@@ -127,16 +460,31 @@ void VulkanBackend::createRenderPass() {
     renderPassInfo.subpassCount = 1;
     renderPassInfo.pSubpasses = &subpass;
 
+
+    VkSubpassDependency dependency{};
+    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependency.dstSubpass = 0;
+
+    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.srcAccessMask = 0;
+
+    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+    renderPassInfo.dependencyCount = 1;
+    renderPassInfo.pDependencies = &dependency;
+
+
+
+
+
+
+
+
+
     if (vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS) {
         throw std::runtime_error("failed to create render pass!");
     }
-
-
-
-
-
-
-
 
 
 }
@@ -179,6 +527,10 @@ std::vector<char> VulkanBackend::readFile(const std::string& filename) {
 
 void VulkanBackend::createGraphicsPipeline() {
 
+    if (enableValidationLayers) {
+        std::cout << "- createGraphicsPipeline " << std::endl;
+    }
+
 
     auto vertShaderCode = readFile(vertexShaderPath);
     auto fragShaderCode = readFile(fragmentShaderPath);
@@ -216,12 +568,20 @@ void VulkanBackend::createGraphicsPipeline() {
     dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
     dynamicState.pDynamicStates = dynamicStates.data();
 
+
+    auto bindingDescription = Vertex::getBindingDescription();
+    auto attributeDescriptions = Vertex::getAttributeDescriptions();
+
+
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertexInputInfo.vertexBindingDescriptionCount = 0;
-    vertexInputInfo.pVertexBindingDescriptions = nullptr; // Optional
-    vertexInputInfo.vertexAttributeDescriptionCount = 0;
-    vertexInputInfo.pVertexAttributeDescriptions = nullptr; // Optional
+    vertexInputInfo.vertexBindingDescriptionCount = 1;
+    vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+    vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+    vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+
+
+
 
 
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
@@ -368,6 +728,12 @@ void VulkanBackend::createGraphicsPipeline() {
 
 VkShaderModule VulkanBackend::createShaderModule(const std::vector<char>& code) {
 
+    if (enableValidationLayers) {
+        std::cout << "- createShaderModule " << std::endl;
+    }
+
+
+
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     createInfo.codeSize = code.size();
@@ -385,6 +751,12 @@ VkShaderModule VulkanBackend::createShaderModule(const std::vector<char>& code) 
 
 
 void VulkanBackend::createImageViews() {
+
+    if (enableValidationLayers) {
+        std::cout << "- createImageViews " << std::endl;
+    }
+
+
 
     swapChainImageViews.resize(swapChainImages.size());
 
@@ -538,6 +910,12 @@ void VulkanBackend::createInstance() {
 
 
 bool VulkanBackend::checkValidationLayerSupport() {
+
+    if (enableValidationLayers) {
+        std::cout << "- checkValidationLayerSupport " << std::endl;
+    }
+
+
     uint32_t layerCount;
     vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
 
@@ -563,6 +941,12 @@ bool VulkanBackend::checkValidationLayerSupport() {
 }
 
 std::vector<const char*> VulkanBackend::getRequiredExtensions() {
+
+    if (enableValidationLayers) {
+        std::cout << "- getRequiredExtensions " << std::endl;
+    }
+
+
     uint32_t glfwExtensionCount = 0;
     const char** glfwExtensions;
     glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
@@ -583,12 +967,20 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
     const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
     void* pUserData) {
 
+
+
+
     std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
 
     return VK_FALSE;
 }
 
 void VulkanBackend::setupDebugMessenger() {
+
+    if (enableValidationLayers) {
+        std::cout << "- setupDebugMessenger " << std::endl;
+    }
+
 
     if (!enableValidationLayers) return;
 
@@ -628,6 +1020,12 @@ void VulkanBackend::DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUt
 
 
 void VulkanBackend::populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo) {
+
+    if (enableValidationLayers) {
+        std::cout << "- populateDebugMessengerCreateInfo " << std::endl;
+    }
+
+
     createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
     createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
@@ -658,8 +1056,9 @@ void VulkanBackend::pickPhysicalDevice() {
 
     for (const auto& device : devices) {
 
-        std::cout << "- phyicsal device scores" << std::endl;
-
+        if (enableValidationLayers) {
+            std::cout << "- phyicsal device scores" << std::endl;
+        }
         if (isDeviceSuitable(device)) {
             
             int score = rateDeviceSuitability(device);
@@ -680,6 +1079,12 @@ void VulkanBackend::pickPhysicalDevice() {
 
 
 bool VulkanBackend::isDeviceSuitable(VkPhysicalDevice device) {
+
+    if (enableValidationLayers) {
+        std::cout << "- isDeviceSuitable " << std::endl;
+    }
+
+
     QueueFamilyIndices indices = findQueueFamilies(device);
 
     bool extensionsSupported = checkDeviceExtensionSupport(device);
@@ -696,6 +1101,13 @@ bool VulkanBackend::isDeviceSuitable(VkPhysicalDevice device) {
 }
 
 bool VulkanBackend::checkDeviceExtensionSupport(VkPhysicalDevice device) {
+
+    if (enableValidationLayers) {
+        std::cout << "- checkDeviceExtensionSupport " << std::endl;
+    }
+
+
+
     uint32_t extensionCount;
     vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
 
@@ -720,6 +1132,12 @@ bool VulkanBackend::checkDeviceExtensionSupport(VkPhysicalDevice device) {
 
 int VulkanBackend::rateDeviceSuitability(VkPhysicalDevice device) {
 
+    if (enableValidationLayers) {
+        std::cout << "- rateDeviceSuitability " << std::endl;
+    }
+
+
+
     VkPhysicalDeviceProperties deviceProperties;
     VkPhysicalDeviceFeatures deviceFeatures;
     vkGetPhysicalDeviceProperties(device, &deviceProperties);
@@ -740,8 +1158,10 @@ int VulkanBackend::rateDeviceSuitability(VkPhysicalDevice device) {
         return 0;
     }
 
-    std::cout << "\t- device name: " << deviceProperties.deviceName << std::endl;
-    std::cout << "\t- device score: " << score << std::endl;
+    if (enableValidationLayers) {
+        std::cout << "\t- device name: " << deviceProperties.deviceName << std::endl;
+        std::cout << "\t- device score: " << score << std::endl;
+    }
 
 
 
@@ -749,6 +1169,12 @@ int VulkanBackend::rateDeviceSuitability(VkPhysicalDevice device) {
 }
 
 VulkanBackend::QueueFamilyIndices VulkanBackend::findQueueFamilies(VkPhysicalDevice device) {
+
+    if (enableValidationLayers) {
+        std::cout << "- findQueueFamilies " << std::endl;
+    }
+
+
     QueueFamilyIndices indices;
     // Logic to find queue family indices to populate struct with
     
@@ -787,6 +1213,10 @@ VulkanBackend::QueueFamilyIndices VulkanBackend::findQueueFamilies(VkPhysicalDev
 }
 
 void VulkanBackend:: createLogicalDevice() {
+
+    if (enableValidationLayers) {
+        std::cout << "- createLogicalDevice " << std::endl;
+    }
 
     QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
 
@@ -836,6 +1266,7 @@ void VulkanBackend:: createLogicalDevice() {
     }
 
     vkGetDeviceQueue(device, indices.presentFamily.value(), 0, &presentQueue);
+    vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &graphicsQueue);
 
 
 }
@@ -844,6 +1275,11 @@ void VulkanBackend:: createLogicalDevice() {
 
 
 void VulkanBackend::createSwapChain() {
+
+    if (enableValidationLayers) {
+        std::cout << "- createSwapChain " << std::endl;
+    }
+
 
     SwapChainSupportDetails swapChainSupport = querySwapChainSupport(physicalDevice);
 
@@ -910,6 +1346,13 @@ void VulkanBackend::createSwapChain() {
 }
 
 VulkanBackend::SwapChainSupportDetails VulkanBackend::querySwapChainSupport(VkPhysicalDevice device) {
+
+    if (enableValidationLayers) {
+        std::cout << "- querySwapChainSupport " << std::endl;
+    }
+
+
+
     SwapChainSupportDetails details;
 
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities);
@@ -936,6 +1379,13 @@ VulkanBackend::SwapChainSupportDetails VulkanBackend::querySwapChainSupport(VkPh
 }
 
 VkSurfaceFormatKHR VulkanBackend::chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats) {
+
+    if (enableValidationLayers) {
+        std::cout << "- chooseSwapSurfaceFormat " << std::endl;
+    }
+
+
+
     for (const auto& availableFormat : availableFormats) {
         if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
             return availableFormat;
@@ -949,6 +1399,12 @@ VkSurfaceFormatKHR VulkanBackend::chooseSwapSurfaceFormat(const std::vector<VkSu
 //VK_PRESENT_MODE_IMMEDIATE_KHR, VK_PRESENT_MODE_FIFO_KHR, VK_PRESENT_MODE_FIFO_RELAXED_KHR, VK_PRESENT_MODE_MAILBOX_KHR
 //mailbox is the best option if non mobile (it takes more energy)
 VkPresentModeKHR VulkanBackend::chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes) {
+
+    if (enableValidationLayers) {
+        std::cout << "- chooseSwapPresentMode " << std::endl;
+    }
+
+
     for (const auto& availablePresentMode : availablePresentModes) {
         if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
             return availablePresentMode;
@@ -960,6 +1416,13 @@ VkPresentModeKHR VulkanBackend::chooseSwapPresentMode(const std::vector<VkPresen
 
 
 VkExtent2D VulkanBackend::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities) {
+
+    if (enableValidationLayers) {
+        std::cout << "- chooseSwapExtent " << std::endl;
+    }
+
+
+
 
     if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
         return capabilities.currentExtent;
