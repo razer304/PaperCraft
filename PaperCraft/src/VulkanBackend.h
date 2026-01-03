@@ -47,8 +47,9 @@ public:
 
 private:
 
-	const char* vertexShaderPath = "C:/Users/razer/source/repos/PaperCraft/PaperCraft/src/shaders/vert.spv";
-	const char* fragmentShaderPath = "C:/Users/razer/source/repos/PaperCraft/PaperCraft/src/shaders/frag.spv";
+	const char* vertexShaderPath = SHADER_DIR "/vert.spv";
+	const char* fragmentShaderPath = SHADER_DIR "/frag.spv";
+
 
 	const int MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -176,6 +177,11 @@ private:
 	VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
 	VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
 
+	void createVertexBuffer();
+
+	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+
+
 	GLFWwindow* window;
 	VkInstance instance;
 	VkDebugUtilsMessengerEXT debugMessenger;
@@ -207,6 +213,9 @@ private:
 	std::vector<VkFence> inFlightFences;
 
 	uint32_t currentFrame = 0;
+
+	VkBuffer vertexBuffer;
+	VkDeviceMemory vertexBufferMemory;
 
 
 	bool framebufferResized = false;

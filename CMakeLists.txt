@@ -48,6 +48,16 @@ set(HEADERS
     ${CMAKE_SOURCE_DIR}/PaperCraft/src/Edge.h
 )
 
+
+
+
+
+
+
+
+
+
+
 add_executable(PaperCraftApp ${SOURCES} ${HEADERS}  )
 
 
@@ -101,21 +111,15 @@ target_link_libraries(PaperCraftApp
 #        Vulkan::Vulkan
 )
 
+
 # Shader compilation
-set(SHADER_DIR ${CMAKE_SOURCE_DIR}/shaders)
-set(SHADER_OUT ${CMAKE_BINARY_DIR}/shaders)
 
-file(GLOB SHADERS "${SHADER_DIR}/*.vert" "${SHADER_DIR}/*.frag")
+# Shader directory relative to project root
+set(SHADER_DIR "${CMAKE_CURRENT_SOURCE_DIR}/PaperCraft/src/shaders")
 
-foreach(SHADER ${SHADERS})
-    get_filename_component(FILE_NAME ${SHADER} NAME)
-    add_custom_command(
-        OUTPUT ${SHADER_OUT}/${FILE_NAME}.spv
-        COMMAND glslc ${SHADER} -o ${SHADER_OUT}/${FILE_NAME}.spv
-        DEPENDS ${SHADER}
-    )
-    list(APPEND SPV_SHADERS ${SHADER_OUT}/${FILE_NAME}.spv)
-endforeach()
+target_compile_definitions(PaperCraftApp PRIVATE
+    SHADER_DIR="${SHADER_DIR}"
+)
 
-add_custom_target(Shaders ALL DEPENDS ${SPV_SHADERS})
-add_dependencies(PaperCraftApp Shaders)
+
+#add_dependencies(PaperCraftApp Shaders)
