@@ -8,8 +8,9 @@
 #include <string>
 #include <stdexcept>
 #include <fstream>
-#include <glm/glm.hpp>
 #include <array>
+
+#include <glm/glm.hpp>
 
 
 
@@ -23,6 +24,12 @@
 #include <cstdint> // Necessary for uint32_t
 #include <limits> // Necessary for std::numeric_limits
 #include <algorithm> // Necessary for std::clamp
+
+#define GLM_FORCE_RADIANS
+#include <glm/gtc/matrix_transform.hpp>
+
+#include <chrono>
+
 
 
 class VulkanBackend {
@@ -46,6 +53,9 @@ public:
 
 
 private:
+
+	//const char* vertexShaderPath = "C:/Users/razer/source/repos/PaperCraft/PaperCraft/src/shaders/vert.spv";
+	//const char* fragmentShaderPath = "C:/Users/razer/source/repos/PaperCraft/PaperCraft/src/shaders/frag.spv";
 
 	const char* vertexShaderPath = SHADER_DIR "/vert.spv";
 	const char* fragmentShaderPath = SHADER_DIR "/frag.spv";
@@ -105,11 +115,25 @@ private:
 	};
 
 	const std::vector<Vertex> vertices = {
-	{{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-	{{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-	{{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
+		{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+		{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+		{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+		{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
 	};
 
+
+	//make sure the data is aligned
+	struct UniformBufferObject {
+		alignas(16) glm::mat4 model;
+		alignas(16) glm::mat4 view;
+		alignas(16) glm::mat4 proj;
+	};
+
+
+
+	const std::vector<uint16_t> indices = {
+	0, 1, 2, 2, 3, 0
+	};
 
 
 	void initWindow();
@@ -181,6 +205,21 @@ private:
 
 	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
+	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+
+	void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+
+	void createIndexBuffer();
+
+	void createDescriptorSetLayout();
+
+	void createUniformBuffers();
+
+	void updateUniformBuffer(uint32_t currentImage);
+
+	void createDescriptorPool();
+
+	void createDescriptorSets();
 
 	GLFWwindow* window;
 	VkInstance instance;
@@ -199,6 +238,7 @@ private:
 	std::vector<VkImageView> swapChainImageViews;
 
 	VkRenderPass renderPass;
+	VkDescriptorSetLayout descriptorSetLayout;
 	VkPipelineLayout pipelineLayout;
 	VkPipeline graphicsPipeline;
 
@@ -217,6 +257,19 @@ private:
 	VkBuffer vertexBuffer;
 	VkDeviceMemory vertexBufferMemory;
 
+	VkBuffer indexBuffer;
+	VkDeviceMemory indexBufferMemory;
+
+	std::vector<VkBuffer> uniformBuffers;
+	std::vector<VkDeviceMemory> uniformBuffersMemory;
+	std::vector<void*> uniformBuffersMapped;
+
+
+	
+
+
+	VkDescriptorPool descriptorPool;
+	std::vector<VkDescriptorSet> descriptorSets;
 
 	bool framebufferResized = false;
 

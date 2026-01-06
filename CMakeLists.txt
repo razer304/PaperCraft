@@ -58,7 +58,7 @@ set(HEADERS
 
 
 
-add_executable(PaperCraftApp ${SOURCES} ${HEADERS}  )
+add_executable(PaperCraftApp ${SOURCES} ${HEADERS}   "PaperCraft/src/ImguiLayer.h" "PaperCraft/src/ImguiLayer.cpp")
 
 
 
