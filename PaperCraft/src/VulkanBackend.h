@@ -31,10 +31,19 @@
 #include <chrono>
 
 
+//these two for imgui
+class ImguiModule;
+#include "ImguiModule.h"
+
+
 
 class VulkanBackend {
 public:
     void runVulkanBackend();
+
+	//these two for imgui
+	ImguiModule imgui;   // Add this
+	VulkanBackend() : imgui(*this) {}  // Construct it properly
 
 	const uint32_t WIDTH = 800;
 	const uint32_t HEIGHT = 600;
@@ -49,7 +58,43 @@ public:
 		const bool enableValidationLayers = true;
 	#endif
 
-	
+	GLFWwindow* window;
+	VkInstance instance;
+	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+	VkDevice device;
+
+	VkQueue graphicsQueue;
+
+	VkDescriptorPool descriptorPool;
+
+	std::vector<VkImage> swapChainImages;
+
+	VkRenderPass renderPass;
+
+	const std::vector<uint16_t> indices = {
+	0, 1, 2, 2, 3, 0
+	};
+
+	struct QueueFamilyIndices {
+		std::optional<uint32_t> graphicsFamily;
+		std::optional<uint32_t> presentFamily;
+
+
+		bool isComplete() {
+			return graphicsFamily.has_value() && presentFamily.has_value();
+		}
+	};
+
+
+	QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
+
+	QueueFamilyIndices queueFamilyIndicesprivate;
+
+	VkCommandBuffer beginSingleTimeCommands();
+
+	void endSingleTimeCommands(VkCommandBuffer commandBuffer);
+
+
 
 
 private:
@@ -64,15 +109,7 @@ private:
 	const int MAX_FRAMES_IN_FLIGHT = 2;
 
 
-	struct QueueFamilyIndices {
-		std::optional<uint32_t> graphicsFamily;
-		std::optional<uint32_t> presentFamily;
-
-
-		bool isComplete() {
-			return graphicsFamily.has_value() && presentFamily.has_value();
-		}
-	};
+	
 
 	struct SwapChainSupportDetails {
 		VkSurfaceCapabilitiesKHR capabilities;
@@ -131,9 +168,7 @@ private:
 
 
 
-	const std::vector<uint16_t> indices = {
-	0, 1, 2, 2, 3, 0
-	};
+	
 
 
 	void initWindow();
@@ -157,7 +192,6 @@ private:
 	int rateDeviceSuitability(VkPhysicalDevice device);
 	bool checkDeviceExtensionSupport(VkPhysicalDevice device);
 
-	QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
 
 	void createLogicalDevice();
 
@@ -221,23 +255,21 @@ private:
 
 	void createDescriptorSets();
 
-	GLFWwindow* window;
-	VkInstance instance;
+
+
 	VkDebugUtilsMessengerEXT debugMessenger;
-	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
-	VkDevice device;
-	VkQueue graphicsQueue;
+	
 	VkSurfaceKHR surface;
 	VkQueue presentQueue;
 
 	VkSwapchainKHR swapChain;
-	std::vector<VkImage> swapChainImages;
+	
 	VkFormat swapChainImageFormat;
 	VkExtent2D swapChainExtent;
 
 	std::vector<VkImageView> swapChainImageViews;
 
-	VkRenderPass renderPass;
+	
 	VkDescriptorSetLayout descriptorSetLayout;
 	VkPipelineLayout pipelineLayout;
 	VkPipeline graphicsPipeline;
@@ -265,10 +297,9 @@ private:
 	std::vector<void*> uniformBuffersMapped;
 
 
+
+
 	
-
-
-	VkDescriptorPool descriptorPool;
 	std::vector<VkDescriptorSet> descriptorSets;
 
 	bool framebufferResized = false;

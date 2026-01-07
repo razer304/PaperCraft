@@ -39,6 +39,8 @@ set(SOURCES
     ${CMAKE_SOURCE_DIR}/PaperCraft/src/main.cpp
     ${CMAKE_SOURCE_DIR}/PaperCraft/src/VulkanBackend.cpp
     ${CMAKE_SOURCE_DIR}/PaperCraft/src/ModelLoader.cpp
+    ${CMAKE_SOURCE_DIR}/PaperCraft/src/ImguiModule.cpp
+
 )
 
 set(HEADERS
@@ -46,6 +48,8 @@ set(HEADERS
     ${CMAKE_SOURCE_DIR}/PaperCraft/src/ModelLoader.h
     ${CMAKE_SOURCE_DIR}/PaperCraft/src/Mesh.h
     ${CMAKE_SOURCE_DIR}/PaperCraft/src/Edge.h
+    ${CMAKE_SOURCE_DIR}/PaperCraft/src/ImguiModule.h
+
 )
 
 
@@ -58,7 +62,7 @@ set(HEADERS
 
 
 
-add_executable(PaperCraftApp ${SOURCES} ${HEADERS}   "PaperCraft/src/ImguiLayer.h" "PaperCraft/src/ImguiLayer.cpp")
+add_executable(PaperCraftApp ${SOURCES} ${HEADERS})
 
 
 

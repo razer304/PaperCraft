@@ -1,5 +1,5 @@
 #include "VulkanBackend.h"
-
+#include "ImguiModule.h"
 
 
 void VulkanBackend::runVulkanBackend() {
@@ -7,6 +7,9 @@ void VulkanBackend::runVulkanBackend() {
         std::cout << "- runVulkanBackend " << std::endl;
     }
 	initWindow();
+
+    
+    
     initVulkan();
     mainLoop();
     cleanupVulkan();
@@ -41,8 +44,15 @@ void VulkanBackend::initVulkan() {
     pickPhysicalDevice();
     createLogicalDevice();
     createSwapChain();
+
+
+
     createImageViews();
     createRenderPass();
+    
+
+
+
     createDescriptorSetLayout();
     createGraphicsPipeline();
     createFramebuffers();
@@ -53,10 +63,21 @@ void VulkanBackend::initVulkan() {
     createUniformBuffers();
 
     createDescriptorPool();
+
+    
+    
+
+	//initimgui descriptor pool
+    imgui.createImGuiDescriptorPool();
+
     createDescriptorSets();
+
+    //initimgui
+    imgui.initImGui();
 
     createCommandBuffers();
     createSyncObjects();
+
 
 
 }
@@ -82,12 +103,20 @@ void VulkanBackend::cleanupVulkan() {
 		DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
     }
 
+
     cleanupSwapChain();
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         vkDestroyBuffer(device, uniformBuffers[i], nullptr);
         vkFreeMemory(device, uniformBuffersMemory[i], nullptr);
     }
+
+
+    ImGui_ImplVulkan_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+    vkDestroyDescriptorPool(device, imgui.imguiPool, nullptr);
+
 
     vkDestroyDescriptorPool(device, descriptorPool, nullptr);
 
@@ -212,12 +241,50 @@ void VulkanBackend::drawFrame() {
         throw std::runtime_error("failed to present swap chain image!");
     }
 
+
     currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 
 }
 
 
 // InitVulkan helper functions
+
+
+
+VkCommandBuffer VulkanBackend::beginSingleTimeCommands() {
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandPool = commandPool;
+    allocInfo.commandBufferCount = 1;
+
+    VkCommandBuffer commandBuffer;
+    vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer);
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    vkBeginCommandBuffer(commandBuffer, &beginInfo);
+
+    return commandBuffer;
+}
+
+void VulkanBackend::endSingleTimeCommands(VkCommandBuffer commandBuffer) {
+    vkEndCommandBuffer(commandBuffer);
+
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &commandBuffer;
+
+    vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+    vkQueueWaitIdle(graphicsQueue);
+
+    vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
+}
+
+
 
 void VulkanBackend::createDescriptorSets() {
 
@@ -624,6 +691,9 @@ void VulkanBackend::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t 
         throw std::runtime_error("failed to begin recording command buffer!");
     }
 
+    // Build ImGUI
+	imgui.buildImGui();
+
 
 
     VkRenderPassBeginInfo renderPassInfo{};
@@ -668,6 +738,15 @@ void VulkanBackend::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t 
     //thingy
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
     vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+
+
+
+
+    // render ImGUI
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
+
+
+
 
 
     vkCmdEndRenderPass(commandBuffer);
@@ -1634,10 +1713,10 @@ void VulkanBackend::createSwapChain() {
     createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
 
-    QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
-    uint32_t queueFamilyIndices[] = { indices.graphicsFamily.value(), indices.presentFamily.value() };
+    queueFamilyIndicesprivate = findQueueFamilies(physicalDevice);
+    uint32_t queueFamilyIndices[] = { queueFamilyIndicesprivate.graphicsFamily.value(), queueFamilyIndicesprivate.presentFamily.value() };
 
-    if (indices.graphicsFamily != indices.presentFamily) {
+    if (queueFamilyIndicesprivate.graphicsFamily != queueFamilyIndicesprivate.presentFamily) {
         createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
         createInfo.queueFamilyIndexCount = 2;
         createInfo.pQueueFamilyIndices = queueFamilyIndices;

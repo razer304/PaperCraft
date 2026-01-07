@@ -1,10 +1,11 @@
 #include "VulkanBackend.h"
 
 int main() {
-    VulkanBackend app;
+    VulkanBackend backvulk;
+
 
     try {
-        app.runVulkanBackend();
+        backvulk.runVulkanBackend();
     }
     catch (const std::exception& e) {
         std::cerr << e.what() << std::endl;
