@@ -1,5 +1,4 @@
 #include "VulkanBackend.h"
-#include "ImguiModule.h"
 
 
 void VulkanBackend::runVulkanBackend() {
@@ -7,9 +6,6 @@ void VulkanBackend::runVulkanBackend() {
         std::cout << "- runVulkanBackend " << std::endl;
     }
 	initWindow();
-
-    
-    
     initVulkan();
     mainLoop();
     cleanupVulkan();
@@ -26,9 +22,23 @@ void VulkanBackend::initWindow() {
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
 
+
+
+
+
     window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
+
     glfwSetWindowUserPointer(window, this);
+
+
+    glfwSetScrollCallback(window, scroll_callback); 
+    glfwSetMouseButtonCallback(window, mouse_button_callback); 
+    glfwSetCursorPosCallback(window, cursor_position_callback); 
+
+
     glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
+
+
 
 
 }
@@ -68,12 +78,12 @@ void VulkanBackend::initVulkan() {
     
 
 	//initimgui descriptor pool
-    imgui.createImGuiDescriptorPool();
+    createImGuiDescriptorPool();
 
     createDescriptorSets();
 
     //initimgui
-    imgui.initImGui();
+    initImGui();
 
     createCommandBuffers();
     createSyncObjects();
@@ -115,7 +125,7 @@ void VulkanBackend::cleanupVulkan() {
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
-    vkDestroyDescriptorPool(device, imgui.imguiPool, nullptr);
+    vkDestroyDescriptorPool(device, imguiPool, nullptr);
 
 
     vkDestroyDescriptorPool(device, descriptorPool, nullptr);
@@ -249,7 +259,220 @@ void VulkanBackend::drawFrame() {
 
 // InitVulkan helper functions
 
+//mouse pointer funcitons
 
+
+
+
+void VulkanBackend::scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
+    auto* backend = reinterpret_cast<VulkanBackend*>(glfwGetWindowUserPointer(window));
+    backend->onScroll(xoffset, yoffset);
+}
+
+void VulkanBackend::mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
+    auto* backend = reinterpret_cast<VulkanBackend*>(glfwGetWindowUserPointer(window));
+    backend->onMouseButton(button, action, mods);
+}
+
+void VulkanBackend::cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
+    auto* backend = reinterpret_cast<VulkanBackend*>(glfwGetWindowUserPointer(window));
+    backend->onCursorMove(xpos, ypos);
+}
+
+
+
+void VulkanBackend::onScroll(double xoffset, double yoffset) {
+    gScale += yoffset * 0.1f;
+    if (gScale < 0.1f) gScale = 0.1f;
+}
+
+void VulkanBackend::onMouseButton(int button, int action, int mods) {
+    if (button == GLFW_MOUSE_BUTTON_LEFT) {
+        if (action == GLFW_PRESS) {
+            gDragging = true;
+            glfwGetCursorPos(window, &gLastX, &gLastY);
+            xstart = gLastX;
+            ystart = gLastY;
+        }
+        else if (action == GLFW_RELEASE) {
+            gDragging = false;
+
+            double releaseX, releaseY;
+            glfwGetCursorPos(window, &releaseX, &releaseY);
+
+            double dx = releaseX - xstart;
+            double dy = releaseY - ystart;
+            double dist = sqrt(dx * dx + dy * dy);
+
+            if (dist < CLICK_THRESHOLD && modelLoaded) {
+                int picked = 0;
+                gEdgeList[picked].cut = !gEdgeList[picked].cut;
+            }
+        }
+    }
+
+    if (button == GLFW_MOUSE_BUTTON_MIDDLE) {
+        if (action == GLFW_PRESS) {
+            gPanning = true;
+            glfwGetCursorPos(window, &gLastPanX, &gLastPanY);
+        }
+        else if (action == GLFW_RELEASE) {
+            gPanning = false;
+        }
+    }
+}
+
+void VulkanBackend::onCursorMove(double xpos, double ypos) {
+    if (gDragging) {
+        double dx = xpos - gLastX;
+        double dy = ypos - gLastY;
+        gLastX = xpos;
+        gLastY = ypos;
+
+        gYaw += dx * 0.5f;
+        gPitch += dy * 0.5f;
+    }
+
+    if (gPanning) {
+        double dx = xpos - gLastPanX;
+        double dy = ypos - gLastPanY;
+        gLastPanX = xpos;
+        gLastPanY = ypos;
+
+        gPanX += dx * 0.01f;
+        gPanY -= dy * 0.01f;
+    }
+}
+
+
+
+
+
+
+
+int VulkanBackend::pickEdge(double mouseX, double mouseY, int screenWidth, int screenHeight, glm::mat4 viewProj) {
+    // Convert mouse coords to NDC
+    float ndcX = (2.0f * mouseX) / screenWidth - 1.0f;
+    float ndcY = 1.0f - (2.0f * mouseY) / screenHeight;
+
+    // Ray in clip space
+    glm::vec4 rayClip(ndcX, ndcY, -1.0f, 1.0f);
+
+    // Transform to world space
+    glm::vec4 rayEye = glm::inverse(viewProj) * rayClip;
+    rayEye = glm::vec4(rayEye.x, rayEye.y, -1.0f, 0.0f);
+    glm::vec3 rayWorld = glm::normalize(glm::vec3(rayEye));
+
+    // Test against each edge
+    for (int i = 0; i < gEdgeList.size(); i++) {
+        //float dist = distanceRayToSegment(cameraPos, rayWorld, gEdgeList[i].v1, gEdgeList[i].v2);
+        float dist = 0.0f; // placeholder
+        if (dist < 0.05f) return i; // threshold
+    }
+    return -1;
+}
+
+
+
+
+
+
+
+//imgui helper functions
+
+
+void VulkanBackend::createImGuiDescriptorPool() {
+    VkDescriptorPoolSize pool_sizes[] = {
+        { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+        { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
+        { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
+        { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
+        { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
+        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
+        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
+        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
+        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
+        { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
+    };
+
+    VkDescriptorPoolCreateInfo pool_info{};
+    pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+    pool_info.maxSets = 1000;
+    pool_info.poolSizeCount = (uint32_t)std::size(pool_sizes);
+    pool_info.pPoolSizes = pool_sizes;
+
+    if (vkCreateDescriptorPool(device, &pool_info, nullptr, &imguiPool) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create ImGui descriptor pool");
+    }
+}
+
+void VulkanBackend::initImGui() {
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+
+    ImGui_ImplGlfw_InitForVulkan(window, true);
+
+    ImGui_ImplVulkan_InitInfo init_info{};
+    init_info.Instance = instance;
+    init_info.PhysicalDevice = physicalDevice;
+    init_info.Device = device;
+    init_info.QueueFamily = queueFamilyIndicesprivate.graphicsFamily.value();
+    init_info.Queue = graphicsQueue;
+    init_info.DescriptorPool = imguiPool;
+    init_info.MinImageCount = 2;
+    init_info.ImageCount = swapChainImages.size();
+    init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+
+    init_info.RenderPass = renderPass; // <- must be set 
+    init_info.Subpass = 0; //
+
+
+    ImGui_ImplVulkan_Init(&init_info);
+
+    // Upload fonts
+    VkCommandBuffer cmd = beginSingleTimeCommands();
+    ImGui_ImplVulkan_CreateFontsTexture();
+    endSingleTimeCommands(cmd);
+
+    ImGui_ImplVulkan_DestroyFontsTexture();
+}
+
+
+void VulkanBackend::buildImGui() {
+
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    // UI: Import FBX button
+    if (ImGui::Button("Import 3D Obj")) {
+        const char* filters[] = { "*" };
+        const char* file = tinyfd_openFileDialog(
+            "Choose 3D File",
+            "",
+            1,
+            filters,
+            nullptr,
+            0
+        );
+        if (file) {
+            std::cout << "Selected 3D File: " << file << std::endl;
+            gMesh = loadMesh(file);
+
+        }
+    }
+
+
+
+    ImGui::Render();
+}
+
+
+
+
+//single time command buffer helper functions
 
 VkCommandBuffer VulkanBackend::beginSingleTimeCommands() {
     VkCommandBufferAllocateInfo allocInfo{};
@@ -284,6 +507,175 @@ void VulkanBackend::endSingleTimeCommands(VkCommandBuffer commandBuffer) {
     vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
 }
 
+
+//model loader helper functions
+
+void VulkanBackend::buildEdges(const aiMesh* mesh) {
+    struct EdgeKey {
+        unsigned int v1, v2;
+        bool operator<(const EdgeKey& other) const {
+            return std::tie(v1, v2) < std::tie(other.v1, other.v2);
+        }
+    };
+
+    std::map<EdgeKey, std::vector<glm::vec3>> edgeNormals;
+
+    // compute normals per face
+    for (unsigned int i = 0; i < mesh->mNumFaces; i++) {
+        aiFace face = mesh->mFaces[i];
+        glm::vec3 v0(mesh->mVertices[face.mIndices[0]].x,
+            mesh->mVertices[face.mIndices[0]].y,
+            mesh->mVertices[face.mIndices[0]].z);
+        glm::vec3 v1(mesh->mVertices[face.mIndices[1]].x,
+            mesh->mVertices[face.mIndices[1]].y,
+            mesh->mVertices[face.mIndices[1]].z);
+        glm::vec3 v2(mesh->mVertices[face.mIndices[2]].x,
+            mesh->mVertices[face.mIndices[2]].y,
+            mesh->mVertices[face.mIndices[2]].z);
+
+        glm::vec3 normal = glm::normalize(glm::cross(v1 - v0, v2 - v0));
+
+        for (int e = 0; e < 3; e++) {
+            unsigned int a = face.mIndices[e];
+            unsigned int b = face.mIndices[(e + 1) % 3];
+            EdgeKey key{ std::min(a,b), std::max(a,b) };
+            edgeNormals[key].push_back(normal);
+        }
+    }
+
+    gEdgeList.clear();
+
+    // collect crease edges
+    for (auto& [key, normals] : edgeNormals) {
+        bool isFeature = false;
+        if (normals.size() == 1) isFeature = true; // boundary
+        else {
+            float dotp = glm::dot(normals[0], normals[1]);
+            if (dotp < 0.999f) isFeature = true; // not 180°
+        }
+        if (isFeature) {
+            glm::vec3 v1(mesh->mVertices[key.v1].x,
+                mesh->mVertices[key.v1].y,
+                mesh->mVertices[key.v1].z);
+            glm::vec3 v2(mesh->mVertices[key.v2].x,
+                mesh->mVertices[key.v2].y,
+                mesh->mVertices[key.v2].z);
+            gEdgeList.push_back({ v1, v2, false }); // default cut=false
+        }
+    }
+}
+
+
+VulkanBackend::Mesh VulkanBackend::loadMesh(const char* path) {
+    Assimp::Importer importer;
+    const aiScene* scene = importer.ReadFile(
+        path,
+        aiProcess_Triangulate |
+        aiProcess_JoinIdenticalVertices |
+        aiProcess_SortByPType
+    );
+
+    VulkanBackend::Mesh result{}; // make sure this exists before use
+
+    if (!scene || !scene->HasMeshes()) {
+        std::cerr << "Failed to load mesh: " << path << std::endl;
+        return result;
+    }
+
+    aiMesh* mesh = scene->mMeshes[0]; // just take the first mesh
+
+    // Collect vertices (x,y,z as floats)
+    std::vector<float> vertices;
+    vertices.reserve(mesh->mNumVertices * 3);
+    for (unsigned int i = 0; i < mesh->mNumVertices; i++) {
+        aiVector3D v = mesh->mVertices[i];
+        vertices.push_back(v.x);
+        vertices.push_back(v.y);
+        vertices.push_back(v.z);
+    }
+
+    // Collect indices
+    std::vector<uint32_t> indices;
+    indices.reserve(mesh->mNumFaces * 3);
+    for (unsigned int i = 0; i < mesh->mNumFaces; i++) {
+        aiFace face = mesh->mFaces[i];
+        for (unsigned int j = 0; j < face.mNumIndices; j++) {
+            indices.push_back(face.mIndices[j]);
+        }
+    }
+
+    buildEdges(mesh);
+
+    // --- Vertex buffer (with staging) ---
+    VkDeviceSize vertexSize = vertices.size() * sizeof(float);
+
+    VkBuffer stagingBuffer;
+    VkDeviceMemory stagingMemory;
+
+    createBuffer(
+        vertexSize,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        stagingBuffer,
+        stagingMemory
+    );
+
+    void* data;
+    vkMapMemory(device, stagingMemory, 0, vertexSize, 0, &data);
+    memcpy(data, vertices.data(), static_cast<size_t>(vertexSize));
+    vkUnmapMemory(device, stagingMemory);
+
+    createBuffer(
+        vertexSize,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        result.vertexBuffer,
+        result.vertexMemory
+    );
+
+    copyBuffer(stagingBuffer, result.vertexBuffer, vertexSize);
+
+    vkDestroyBuffer(device, stagingBuffer, nullptr);
+    vkFreeMemory(device, stagingMemory, nullptr);
+
+    // --- Index buffer (with staging) ---
+    VkDeviceSize indexSize = indices.size() * sizeof(uint32_t);
+
+    createBuffer(
+        indexSize,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        stagingBuffer,
+        stagingMemory
+    );
+
+    vkMapMemory(device, stagingMemory, 0, indexSize, 0, &data);
+    memcpy(data, indices.data(), static_cast<size_t>(indexSize));
+    vkUnmapMemory(device, stagingMemory);
+
+    createBuffer(
+        indexSize,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        result.indexBuffer,
+        result.indexMemory
+    );
+
+    copyBuffer(stagingBuffer, result.indexBuffer, indexSize);
+
+    vkDestroyBuffer(device, stagingBuffer, nullptr);
+    vkFreeMemory(device, stagingMemory, nullptr);
+
+    // --- Final mesh info ---
+    result.indexCount = static_cast<uint32_t>(indices.size());
+    modelLoaded = true;
+
+    return result;
+}
+
+
+
+//vulkan stuffs
 
 
 void VulkanBackend::createDescriptorSets() {
@@ -357,34 +749,45 @@ void VulkanBackend::createDescriptorPool() {
     }
 }
 
-
-
 void VulkanBackend::updateUniformBuffer(uint32_t currentImage) {
-
-    if (enableValidationLayers) {
-        std::cout << "- updateUniformBuffer " << std::endl;
-    }
-
-
-    static auto startTime = std::chrono::high_resolution_clock::now();
-
-    auto currentTime = std::chrono::high_resolution_clock::now();
-    float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-
     UniformBufferObject ubo{};
-    ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 
-    ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    // --- MODEL TRANSFORM ---
+    glm::mat4 model = glm::mat4(1.0f);
 
-    ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 10.0f);
+    // Apply user-controlled rotation
+    model = glm::rotate(model, glm::radians((float)gPitch), glm::vec3(1, 0, 0));
+    model = glm::rotate(model, glm::radians((float)gYaw), glm::vec3(0, 1, 0));
 
+    // Apply user-controlled zoom (scale)
+    model = glm::scale(model, glm::vec3(gScale));
 
-    ubo.proj[1][1] *= -1;
+    // Apply user-controlled panning
+    model = glm::translate(model, glm::vec3(gPanX, gPanY, 0.0f));
 
+    ubo.model = model;
+
+    // --- VIEW MATRIX ---
+    ubo.view = glm::lookAt(
+        glm::vec3(0.0f, 0.0f, 3.0f),   // camera position
+        glm::vec3(0.0f, 0.0f, 0.0f),   // look at origin
+        glm::vec3(0.0f, 1.0f, 0.0f)    // up
+    );
+
+    // --- PROJECTION MATRIX ---
+    ubo.proj = glm::perspective(
+        glm::radians(45.0f),
+        swapChainExtent.width / (float)swapChainExtent.height,
+        0.1f,
+        100.0f
+    );
+    ubo.proj[1][1] *= -1; // Vulkan Y flip
+
+    // Copy to GPU
     memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
-
-
 }
+
+
 
 void VulkanBackend::createUniformBuffers() {
 
@@ -692,7 +1095,7 @@ void VulkanBackend::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t 
     }
 
     // Build ImGUI
-	imgui.buildImGui();
+	buildImGui();
 
 
 
@@ -736,9 +1139,28 @@ void VulkanBackend::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t 
 
 
     //thingy
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
-    vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 
+
+    // Bind the mesh loaded from Assimp
+    if (modelLoaded) {
+        VkDeviceSize offsets[] = { 0 };
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, &gMesh.vertexBuffer, offsets);
+
+        vkCmdBindIndexBuffer(commandBuffer, gMesh.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+        vkCmdBindDescriptorSets(
+            commandBuffer,
+            VK_PIPELINE_BIND_POINT_GRAPHICS,
+            pipelineLayout,
+            0,
+            1,
+            &descriptorSets[currentFrame],
+            0,
+            nullptr
+        );
+
+        vkCmdDrawIndexed(commandBuffer, gMesh.indexCount, 1, 0, 0, 0);
+    }
 
 
 
@@ -980,17 +1402,15 @@ void VulkanBackend::createGraphicsPipeline() {
     dynamicState.pDynamicStates = dynamicStates.data();
 
 
-    auto bindingDescription = Vertex::getBindingDescription();
-    auto attributeDescriptions = Vertex::getAttributeDescriptions();
-
+    auto bindingDescription = MeshVertex::getBindingDescription();
+    auto attributeDescriptions = MeshVertex::getAttributeDescriptions();
 
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     vertexInputInfo.vertexBindingDescriptionCount = 1;
-    vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
     vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+    vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
     vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
-
 
 
 

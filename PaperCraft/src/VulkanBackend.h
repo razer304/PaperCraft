@@ -30,10 +30,15 @@
 
 #include <chrono>
 
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_vulkan.h>
+#include "tinyfiledialogs.h"
 
-//these two for imgui
-class ImguiModule;
-#include "ImguiModule.h"
+
+#include <assimp/Importer.hpp>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
 
 
 
@@ -41,9 +46,6 @@ class VulkanBackend {
 public:
     void runVulkanBackend();
 
-	//these two for imgui
-	ImguiModule imgui;   // Add this
-	VulkanBackend() : imgui(*this) {}  // Construct it properly
 
 	const uint32_t WIDTH = 800;
 	const uint32_t HEIGHT = 600;
@@ -297,6 +299,7 @@ private:
 	std::vector<void*> uniformBuffersMapped;
 
 
+	
 
 
 	
@@ -309,6 +312,100 @@ private:
 	VK_KHR_SWAPCHAIN_EXTENSION_NAME
 	};
 
+
+	// ImGui related functions
+	void createImGuiDescriptorPool();
+	void initImGui();
+	void buildImGui();
+
+
+	VkDescriptorPool imguiPool;
+
+
+
+	struct MeshVertex {
+		glm::vec3 pos;
+
+		static VkVertexInputBindingDescription getBindingDescription() {
+			VkVertexInputBindingDescription binding{};
+			binding.binding = 0;
+			binding.stride = sizeof(MeshVertex);
+			binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+			return binding;
+		}
+
+		static std::array<VkVertexInputAttributeDescription, 1> getAttributeDescriptions() {
+			std::array<VkVertexInputAttributeDescription, 1> attrs{};
+
+			attrs[0].binding = 0;
+			attrs[0].location = 0;
+			attrs[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+			attrs[0].offset = offsetof(MeshVertex, pos);
+
+			return attrs;
+		}
+	};
+
+
+
+	struct Mesh {
+		VkBuffer vertexBuffer{};
+		VkDeviceMemory vertexMemory{};
+
+		VkBuffer indexBuffer{};
+		VkDeviceMemory indexMemory{};
+
+		uint32_t indexCount = 0;
+	};
+
+
+
+	struct Edge {
+		glm::vec3 v1;
+		glm::vec3 v2;
+		bool cut = false;
+	};
+
+	std::vector<Edge> gEdgeList;
+
+	Mesh gMesh;
+
+	bool modelLoaded = false;
+
+
+	void buildEdges(const aiMesh* mesh);
+
+	Mesh loadMesh(const char* path);
+
+	static void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
+
+	static void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
+
+	static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos);
+
+	void onScroll(double xoffset, double yoffset);
+	void onMouseButton(int button, int action, int mods);
+	void onCursorMove(double xpos, double ypos);
+
+
+
+	int pickEdge(double mouseX, double mouseY, int screenWidth, int screenHeight, glm::mat4 viewProj);
+
+	float gScale = 1.0f;
+	float gYaw = 0.0f;   // rotation around Y axis
+	float gPitch = 0.0f; // rotation around X axis
+	bool gDragging = false;
+	double gLastX, gLastY;
+
+	float gPanX = 0.0f;
+	float gPanY = 0.0f;
+	bool gPanning = false;
+	double gLastPanX, gLastPanY;
+
+	const double CLICK_THRESHOLD = 5.0;
+
+	double xstart;
+	double ystart;
 
 };
 
