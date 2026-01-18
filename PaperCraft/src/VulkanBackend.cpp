@@ -345,11 +345,6 @@ void VulkanBackend::onCursorMove(double xpos, double ypos) {
 }
 
 
-
-
-
-
-
 int VulkanBackend::pickEdge(double mouseX, double mouseY, int screenWidth, int screenHeight, glm::mat4 viewProj) {
     // Convert mouse coords to NDC
     float ndcX = (2.0f * mouseX) / screenWidth - 1.0f;
@@ -371,10 +366,6 @@ int VulkanBackend::pickEdge(double mouseX, double mouseY, int screenWidth, int s
     }
     return -1;
 }
-
-
-
-
 
 
 
@@ -543,6 +534,9 @@ void VulkanBackend::buildEdges(const aiMesh* mesh) {
         }
     }
 
+
+
+
     gEdgeList.clear();
 
     // collect crease edges
@@ -563,6 +557,10 @@ void VulkanBackend::buildEdges(const aiMesh* mesh) {
             gEdgeList.push_back({ v1, v2, false }); // default cut=false
         }
     }
+
+
+
+
 }
 
 
@@ -1106,7 +1104,7 @@ void VulkanBackend::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t 
     renderPassInfo.renderArea.offset = { 0, 0 };
     renderPassInfo.renderArea.extent = swapChainExtent;
 
-    VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
+    VkClearValue clearColor = { {{0.1f, 0.2f, 0.3f, 1.0f}} };
     renderPassInfo.clearValueCount = 1;
     renderPassInfo.pClearValues = &clearColor;
 

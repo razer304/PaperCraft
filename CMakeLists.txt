@@ -60,7 +60,7 @@ set(HEADERS
 
 
 
-add_executable(PaperCraftApp ${SOURCES} ${HEADERS})
+#add_executable(PaperCraftApp ${SOURCES} ${HEADERS} "PaperCraft/src/vk_initializers.cpp" "PaperCraft/src/vk_initializers.h")
 
 
 
