@@ -399,10 +399,11 @@ void VulkanBackend::initImGui() {
     init_info.DescriptorPool = imguiPool;
     init_info.MinImageCount = 2;
     init_info.ImageCount = swapChainImages.size();
-    init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+	init_info.PipelineInfoMain.RenderPass = renderPass;
 
-    init_info.RenderPass = renderPass; // <- must be set 
-    init_info.Subpass = 0; //
+	init_info.PipelineInfoMain.Subpass = 0;
+	init_info.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+
 
 
     ImGui_ImplVulkan_Init(&init_info);
@@ -424,18 +425,22 @@ void VulkanBackend::initImGui() {
     }
 
 
-    ImGui_ImplVulkan_CreateFontsTexture();
+    //ImGui_ImplVulkan_CreateFontsTexture(cmd);
+
     endSingleTimeCommands(cmd);
 
+    // No destroy call anymore
+    //ImGui_ImplVulkan_DestroyFontUploadObjects();
 
-
-    
-
-    ImGui_ImplVulkan_DestroyFontsTexture();
 }
 
 
 void VulkanBackend::buildImGui() {
+
+    if (enableValidationLayers) {
+        std::cout << "- buildImGui " << std::endl;
+    }
+
 
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();
@@ -1157,6 +1162,9 @@ void VulkanBackend::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t 
     // Build ImGUI
 	buildImGui();
 
+    if (enableValidationLayers) {
+        std::cout << "- after buildImGui" << std::endl;
+    }
 
     VkClearValue clearColor = { {{0.1f, 0.2f, 0.3f, 1.0f}} };
 
@@ -1173,9 +1181,11 @@ void VulkanBackend::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t 
 
     VkBuffer vertexBuffers[] = { gMesh.vertexBuffer };
     VkDeviceSize offsets[] = { 0 };
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
-    vkCmdBindIndexBuffer(commandBuffer, gMesh.indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+
+    //moved these two over too if model loaded since they null otherwise
+    //vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+    //vkCmdBindIndexBuffer(commandBuffer, gMesh.indexBuffer, 0, VK_INDEX_TYPE_UINT16);
 
 
 

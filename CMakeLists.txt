@@ -22,9 +22,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # These will be resolved automatically if you configured VS with vcpkg toolchain
 # --- Dependencies via vcpkg ---
 find_package(glfw3 CONFIG REQUIRED)
-find_package(OpenGL REQUIRED)
+#find_package(OpenGL REQUIRED)
 find_package(glad CONFIG REQUIRED)
-find_package(imgui CONFIG REQUIRED)
+#find_package(imgui CONFIG REQUIRED)
 find_package(tinyfiledialogs CONFIG REQUIRED)
 find_package(assimp CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
@@ -55,7 +55,20 @@ set(HEADERS
 )
 
 
+add_library(imgui
+    external/imgui/imgui.cpp
+    external/imgui/imgui_draw.cpp
+    external/imgui/imgui_tables.cpp
+    external/imgui/imgui_widgets.cpp
+    external/imgui/imgui_demo.cpp
 
+    external/imgui/backends/imgui_impl_vulkan.cpp
+    external/imgui/backends/imgui_impl_glfw.cpp
+)
+
+
+
+#target_include_directories(PaperCraftApp PRIVATE external/imgui external/imgui/backends)
 
 
 
@@ -71,6 +84,8 @@ add_executable(PaperCraftApp ${SOURCES} ${HEADERS})
 
 target_include_directories(PaperCraftApp PRIVATE
     ${CMAKE_SOURCE_DIR}/PaperCraft/src
+    external/imgui
+    external/imgui/backends
 )
 
 
@@ -103,15 +118,18 @@ endif()
 
 #target_include_directories(fbx PUBLIC "external/FBX/include")
 
+target_link_libraries(imgui PRIVATE glfw Vulkan::Vulkan)
+
+target_include_directories(imgui PUBLIC external/imgui external/imgui/backends)
 
 
 # --- Link everything together ---
 target_link_libraries(PaperCraftApp
     PRIVATE
         glfw
-        OpenGL::GL
+        #OpenGL::GL
         glad::glad
-        imgui::imgui
+        imgui
         #imgui:x64-windows
         tinyfiledialogs::tinyfiledialogs
         assimp::assimp
