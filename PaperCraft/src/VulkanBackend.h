@@ -112,12 +112,12 @@ private:
 
 
 	
-
 	struct SwapChainSupportDetails {
 		VkSurfaceCapabilitiesKHR capabilities;
 		std::vector<VkSurfaceFormatKHR> formats;
 		std::vector<VkPresentModeKHR> presentModes;
 	};
+
 
 	struct Vertex {
 		glm::vec2 pos;
@@ -375,7 +375,7 @@ private:
 	bool modelLoaded = false;
 
 
-	void buildEdges(const aiMesh* mesh);
+	//void buildEdges(const aiMesh* mesh);
 
 	Mesh loadMesh(const char* path);
 
