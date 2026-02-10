@@ -153,13 +153,11 @@ private:
 
 	};
 
+	
 	const std::vector<Vertex> vertices = {
-		{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-		{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-		{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-		{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+		{{0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}}
 	};
-
+	
 
 	//make sure the data is aligned
 	struct UniformBufferObject {
@@ -288,11 +286,11 @@ private:
 
 	uint32_t currentFrame = 0;
 
-	VkBuffer vertexBuffer;
-	VkDeviceMemory vertexBufferMemory;
+	//VkBuffer vertexBuffer;
+	//VkDeviceMemory vertexBufferMemory;
 
-	VkBuffer indexBuffer;
-	VkDeviceMemory indexBufferMemory;
+	//VkBuffer indexBuffer;
+	//VkDeviceMemory indexBufferMemory;
 
 	std::vector<VkBuffer> uniformBuffers;
 	std::vector<VkDeviceMemory> uniformBuffersMemory;
@@ -309,7 +307,11 @@ private:
 
 
 	const std::vector<const char*> deviceExtensions = {
-	VK_KHR_SWAPCHAIN_EXTENSION_NAME
+	VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+	};
+
+	const std::vector<const char*> instanceExtensions = {
+	VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
 	};
 
 
@@ -322,7 +324,7 @@ private:
 	VkDescriptorPool imguiPool;
 
 
-
+	
 	struct MeshVertex {
 		glm::vec3 pos;
 
@@ -345,9 +347,9 @@ private:
 			return attrs;
 		}
 	};
+	
 
-
-
+	
 	struct Mesh {
 		VkBuffer vertexBuffer{};
 		VkDeviceMemory vertexMemory{};
@@ -358,7 +360,7 @@ private:
 		uint32_t indexCount = 0;
 	};
 
-
+	
 
 	struct Edge {
 		glm::vec3 v1;

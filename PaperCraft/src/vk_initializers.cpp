@@ -1,5 +1,21 @@
 ﻿#include <vk_initializers.h>
 
+
+VkDebugUtilsObjectNameInfoEXT vkinit::debug_name_create_info(VkObjectType type, uint64_t object, const char* name)
+{
+	VkDebugUtilsObjectNameInfoEXT nameInfo{};
+
+	nameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+	nameInfo.pNext = nullptr;
+
+
+	nameInfo.objectType = type;
+	nameInfo.objectHandle = object;
+	nameInfo.pObjectName = name;
+	return nameInfo;
+}
+
+
 VkCommandPoolCreateInfo vkinit::command_pool_create_info(uint32_t queueFamilyIndex, VkCommandPoolCreateFlags flags /*= 0*/)
 {
 	VkCommandPoolCreateInfo info = {};
@@ -8,6 +24,10 @@ VkCommandPoolCreateInfo vkinit::command_pool_create_info(uint32_t queueFamilyInd
 
 	info.flags = flags;
 	info.queueFamilyIndex = queueFamilyIndex;
+	
+	
+
+
 	return info;
 }
 
@@ -34,7 +54,7 @@ VkCommandBufferBeginInfo vkinit::command_buffer_begin_info(VkCommandBufferUsageF
 	return info;
 }
 
-VkFramebufferCreateInfo vkinit::framebuffer_create_info(VkRenderPass renderPass, VkExtent2D extent)
+VkFramebufferCreateInfo vkinit::framebuffer_create_info(VkRenderPass renderPass, VkExtent2D extent, VkImageView* attachments)
 {
 	VkFramebufferCreateInfo info = {};
 	info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -42,6 +62,7 @@ VkFramebufferCreateInfo vkinit::framebuffer_create_info(VkRenderPass renderPass,
 
 	info.renderPass = renderPass;
 	info.attachmentCount = 1;
+	info.pAttachments = attachments;
 	info.width = extent.width;
 	info.height = extent.height;
 	info.layers = 1;
@@ -69,51 +90,60 @@ VkSemaphoreCreateInfo vkinit::semaphore_create_info(VkSemaphoreCreateFlags flags
 	return info;
 }
 
-VkSubmitInfo vkinit::submit_info(VkCommandBuffer* cmd)
+VkSubmitInfo vkinit::submit_info(VkCommandBuffer* cmd, VkSemaphore waitSemaphores[], VkSemaphore signalSemaphores[], VkPipelineStageFlags waitStages[])
 {
 	VkSubmitInfo info = {};
 	info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	info.pNext = nullptr;
 
-	info.waitSemaphoreCount = 0;
-	info.pWaitSemaphores = nullptr;
-	info.pWaitDstStageMask = nullptr;
+	// i could make the counts dynamic but im afraid it will be unefficent
+
+	info.waitSemaphoreCount = 1;
+	info.pWaitSemaphores = waitSemaphores;
+	info.pWaitDstStageMask = waitStages;
 	info.commandBufferCount = 1;
 	info.pCommandBuffers = cmd;
-	info.signalSemaphoreCount = 0;
-	info.pSignalSemaphores = nullptr;
+	info.signalSemaphoreCount = 1;
+	info.pSignalSemaphores = signalSemaphores;
 
 	return info;
 }
 
-VkPresentInfoKHR vkinit::present_info()
+VkPresentInfoKHR vkinit::present_info(VkSwapchainKHR swapChains[], VkSemaphore signalSemaphores[], uint32_t* imageIndex)
 {
 	VkPresentInfoKHR info = {};
 	info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 	info.pNext = nullptr;
 
-	info.swapchainCount = 0;
-	info.pSwapchains = nullptr;
-	info.pWaitSemaphores = nullptr;
-	info.waitSemaphoreCount = 0;
-	info.pImageIndices = nullptr;
+	info.swapchainCount = 1;
+	info.pSwapchains = swapChains;
+
+	info.waitSemaphoreCount = 1;
+	info.pWaitSemaphores = signalSemaphores;
+	
+	info.pImageIndices = imageIndex;
+
+	info.pResults = nullptr;
 
 	return info;
 }
 
-VkRenderPassBeginInfo vkinit::renderpass_begin_info(VkRenderPass renderPass, VkExtent2D windowExtent, VkFramebuffer framebuffer)
+VkRenderPassBeginInfo vkinit::renderpass_begin_info(VkRenderPass renderPass, VkExtent2D windowExtent, VkFramebuffer framebuffer, VkClearValue* clearColor)
 {
 	VkRenderPassBeginInfo info = {};
 	info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	info.pNext = nullptr;
-
 	info.renderPass = renderPass;
+	info.framebuffer = framebuffer;
+
 	info.renderArea.offset.x = 0;
 	info.renderArea.offset.y = 0;
+
 	info.renderArea.extent = windowExtent;
+
 	info.clearValueCount = 1;
-	info.pClearValues = nullptr;
-	info.framebuffer = framebuffer;
+	info.pClearValues = clearColor;
+
+	info.pNext = nullptr;
 
 	return info;
 }
@@ -323,3 +353,39 @@ VkSamplerCreateInfo vkinit::sampler_create_info(VkFilter filters, VkSamplerAddre
 
 	return info;
 }
+
+
+
+VkDeviceCreateInfo vkinit::device_create_info(
+	const std::vector<VkDeviceQueueCreateInfo>& queueCreateInfos,
+	const VkPhysicalDeviceFeatures& deviceFeatures,
+	const std::vector<const char*>& deviceExtensions,
+	const std::vector<const char*>& validationLayers,
+	bool enableValidationLayers)
+{
+	VkDeviceCreateInfo info = {};
+	info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+
+	info.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
+	info.pQueueCreateInfos = queueCreateInfos.data();
+
+
+
+	info.pEnabledFeatures = &deviceFeatures;
+
+	info.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
+	info.ppEnabledExtensionNames = deviceExtensions.data();
+
+
+	if (enableValidationLayers) {
+		info.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+		info.ppEnabledLayerNames = validationLayers.data();
+	}
+	else {
+		info.enabledLayerCount = 0;
+	}	
+	
+	
+	return info;
+}
+

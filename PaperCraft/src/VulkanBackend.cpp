@@ -1,4 +1,5 @@
 #include "VulkanBackend.h"
+#include "vk_initializers.h"
 
 
 void VulkanBackend::runVulkanBackend() {
@@ -67,8 +68,8 @@ void VulkanBackend::initVulkan() {
     createGraphicsPipeline();
     createFramebuffers();
     createCommandPool();
-    createVertexBuffer();
-    createIndexBuffer();
+    //createVertexBuffer();
+    //createIndexBuffer();
 
     createUniformBuffers();
 
@@ -133,11 +134,11 @@ void VulkanBackend::cleanupVulkan() {
     vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 
 
-    vkDestroyBuffer(device, indexBuffer, nullptr);
-    vkFreeMemory(device, indexBufferMemory, nullptr);
+    vkDestroyBuffer(device, gMesh.indexBuffer, nullptr);
+    vkFreeMemory(device, gMesh.indexMemory, nullptr);
 
-    vkDestroyBuffer(device, vertexBuffer, nullptr);
-    vkFreeMemory(device, vertexBufferMemory, nullptr);
+    vkDestroyBuffer(device, gMesh.vertexBuffer, nullptr);
+    vkFreeMemory(device, gMesh.vertexMemory, nullptr);
 
     
 
@@ -153,6 +154,9 @@ void VulkanBackend::cleanupVulkan() {
     }
 
     vkDestroyCommandPool(device, commandPool, nullptr);
+
+
+
 
     vkDestroyDevice(device, nullptr);
 
@@ -201,41 +205,19 @@ void VulkanBackend::drawFrame() {
 
     
 
-    
-
-
-
-    VkSubmitInfo submitInfo{};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-
     VkSemaphore waitSemaphores[] = { imageAvailableSemaphores[currentFrame] };
     VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-    submitInfo.waitSemaphoreCount = 1;
-    submitInfo.pWaitSemaphores = waitSemaphores;
-    submitInfo.pWaitDstStageMask = waitStages;
-
-    submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &commandBuffers[currentFrame];
-
     VkSemaphore signalSemaphores[] = { renderFinishedSemaphores[currentFrame] };
-    submitInfo.signalSemaphoreCount = 1;
-    submitInfo.pSignalSemaphores = signalSemaphores;
-
-
-
-    VkPresentInfoKHR presentInfo{};
-    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-
-    presentInfo.waitSemaphoreCount = 1;
-    presentInfo.pWaitSemaphores = signalSemaphores;
 
     VkSwapchainKHR swapChains[] = { swapChain };
-    presentInfo.swapchainCount = 1;
-    presentInfo.pSwapchains = swapChains;
-    presentInfo.pImageIndices = &imageIndex;
 
-    presentInfo.pResults = nullptr; // Optional
+    VkSubmitInfo submitInfo = vkinit::submit_info(&commandBuffers[currentFrame], waitSemaphores, signalSemaphores, waitStages);
+    
+    
+
+    VkPresentInfoKHR presentInfo = vkinit::present_info(swapChains, signalSemaphores, &imageIndex);
+
+
 
     if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFences[currentFrame]) != VK_SUCCESS) {
         throw std::runtime_error("failed to submit draw command buffer!");
@@ -373,6 +355,7 @@ int VulkanBackend::pickEdge(double mouseX, double mouseY, int screenWidth, int s
 
 
 void VulkanBackend::createImGuiDescriptorPool() {
+
     VkDescriptorPoolSize pool_sizes[] = {
         { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
         { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
@@ -397,6 +380,8 @@ void VulkanBackend::createImGuiDescriptorPool() {
     if (vkCreateDescriptorPool(device, &pool_info, nullptr, &imguiPool) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create ImGui descriptor pool");
     }
+
+
 }
 
 void VulkanBackend::initImGui() {
@@ -424,8 +409,27 @@ void VulkanBackend::initImGui() {
 
     // Upload fonts
     VkCommandBuffer cmd = beginSingleTimeCommands();
+
+    if (enableValidationLayers) {
+
+        VkDebugUtilsObjectNameInfoEXT nameInfo = vkinit::debug_name_create_info(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)cmd, "ImGuicommandBuffer");
+
+        PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetInstanceProcAddr(instance, "vkSetDebugUtilsObjectNameEXT");
+
+        if (vkSetDebugUtilsObjectNameEXT) {
+            vkSetDebugUtilsObjectNameEXT(device, &nameInfo);
+        }
+
+
+    }
+
+
     ImGui_ImplVulkan_CreateFontsTexture();
     endSingleTimeCommands(cmd);
+
+
+
+    
 
     ImGui_ImplVulkan_DestroyFontsTexture();
 }
@@ -466,20 +470,41 @@ void VulkanBackend::buildImGui() {
 //single time command buffer helper functions
 
 VkCommandBuffer VulkanBackend::beginSingleTimeCommands() {
-    VkCommandBufferAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandPool = commandPool;
-    allocInfo.commandBufferCount = 1;
+
+
+    VkCommandBufferAllocateInfo allocInfo = vkinit::command_buffer_allocate_info(commandPool, 1, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+
+
+
+
+    
 
     VkCommandBuffer commandBuffer;
     vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer);
 
-    VkCommandBufferBeginInfo beginInfo{};
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    if (enableValidationLayers) {
+
+        VkDebugUtilsObjectNameInfoEXT nameInfo = vkinit::debug_name_create_info(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)commandBuffer, "commandBuffer");
+
+        PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetInstanceProcAddr(instance, "vkSetDebugUtilsObjectNameEXT");
+
+        if (vkSetDebugUtilsObjectNameEXT) {
+            vkSetDebugUtilsObjectNameEXT(device, &nameInfo);
+        }
+
+
+    }
+
+
+
+    VkCommandBufferBeginInfo beginInfo = vkinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+
 
     vkBeginCommandBuffer(commandBuffer, &beginInfo);
+
+
+
 
     return commandBuffer;
 }
@@ -500,7 +525,7 @@ void VulkanBackend::endSingleTimeCommands(VkCommandBuffer commandBuffer) {
 
 
 //model loader helper functions
-
+/*
 void VulkanBackend::buildEdges(const aiMesh* mesh) {
     struct EdgeKey {
         unsigned int v1, v2;
@@ -562,9 +587,14 @@ void VulkanBackend::buildEdges(const aiMesh* mesh) {
 
 
 }
-
+*/
 
 VulkanBackend::Mesh VulkanBackend::loadMesh(const char* path) {
+
+    if (enableValidationLayers) {
+        std::cout << "- loadMesh " << currentFrame << std::endl;
+    }
+
     Assimp::Importer importer;
     const aiScene* scene = importer.ReadFile(
         path,
@@ -602,7 +632,7 @@ VulkanBackend::Mesh VulkanBackend::loadMesh(const char* path) {
         }
     }
 
-    buildEdges(mesh);
+    //buildEdges(mesh);
 
     // --- Vertex buffer (with staging) ---
     VkDeviceSize vertexSize = vertices.size() * sizeof(float);
@@ -635,6 +665,9 @@ VulkanBackend::Mesh VulkanBackend::loadMesh(const char* path) {
 
     vkDestroyBuffer(device, stagingBuffer, nullptr);
     vkFreeMemory(device, stagingMemory, nullptr);
+
+
+
 
     // --- Index buffer (with staging) ---
     VkDeviceSize indexSize = indices.size() * sizeof(uint32_t);
@@ -859,9 +892,9 @@ void VulkanBackend::createIndexBuffer() {
     memcpy(data, indices.data(), (size_t)bufferSize);
     vkUnmapMemory(device, stagingBufferMemory);
 
-    createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBuffer, indexBufferMemory);
+    createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, gMesh.indexBuffer, gMesh.indexMemory);
 
-    copyBuffer(stagingBuffer, indexBuffer, bufferSize);
+    copyBuffer(stagingBuffer, gMesh.indexBuffer, bufferSize);
 
     vkDestroyBuffer(device, stagingBuffer, nullptr);
     vkFreeMemory(device, stagingBufferMemory, nullptr);
@@ -908,6 +941,13 @@ void VulkanBackend::createVertexBuffer() {
         std::cout << "- createVertexBuffer " << std::endl;
     }
 
+    // Destroy old buffer if it exists 
+    if (gMesh.vertexBuffer != VK_NULL_HANDLE) 
+    {
+        vkDestroyBuffer(device, gMesh.vertexBuffer, nullptr);
+        vkFreeMemory(device, gMesh.vertexMemory, nullptr);
+    }
+
 
     VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
 
@@ -920,9 +960,27 @@ void VulkanBackend::createVertexBuffer() {
     memcpy(data, vertices.data(), (size_t)bufferSize);
     vkUnmapMemory(device, stagingBufferMemory);
 
-    createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBuffer, vertexBufferMemory);
+    createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, gMesh.vertexBuffer, gMesh.vertexMemory);
 
-    copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
+
+
+
+    if (enableValidationLayers) {
+
+        VkDebugUtilsObjectNameInfoEXT nameInfo = vkinit::debug_name_create_info(VK_OBJECT_TYPE_BUFFER, (uint64_t)gMesh.vertexBuffer, "vertexBufferssss");
+
+        PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetInstanceProcAddr(instance, "vkSetDebugUtilsObjectNameEXT");
+
+        if (vkSetDebugUtilsObjectNameEXT) {
+            vkSetDebugUtilsObjectNameEXT(device, &nameInfo);
+        }
+
+
+    }
+
+
+
+    copyBuffer(stagingBuffer, gMesh.vertexBuffer, bufferSize);
 
     vkDestroyBuffer(device, stagingBuffer, nullptr);
     vkFreeMemory(device, stagingBufferMemory, nullptr);
@@ -1055,12 +1113,13 @@ void VulkanBackend::createSyncObjects() {
 
 
 
-    VkSemaphoreCreateInfo semaphoreInfo{};
-    semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    VkSemaphoreCreateInfo semaphoreInfo = vkinit::semaphore_create_info();
 
-    VkFenceCreateInfo fenceInfo{};
-    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+
+
+    VkFenceCreateInfo fenceInfo = vkinit::fence_create_info(VK_FENCE_CREATE_SIGNALED_BIT);
+
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphores[i]) != VK_SUCCESS ||
@@ -1083,39 +1142,40 @@ void VulkanBackend::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t 
     }
 
 
-    VkCommandBufferBeginInfo beginInfo{};
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    beginInfo.flags = 0; // Optional
-    beginInfo.pInheritanceInfo = nullptr; // Optional
+    VkCommandBufferBeginInfo beginInfo = vkinit::command_buffer_begin_info();
+
+
+
 
     if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
         throw std::runtime_error("failed to begin recording command buffer!");
     }
 
+
+
+
     // Build ImGUI
 	buildImGui();
 
 
-
-    VkRenderPassBeginInfo renderPassInfo{};
-    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    renderPassInfo.renderPass = renderPass;
-    renderPassInfo.framebuffer = swapChainFramebuffers[imageIndex];
-    renderPassInfo.renderArea.offset = { 0, 0 };
-    renderPassInfo.renderArea.extent = swapChainExtent;
-
     VkClearValue clearColor = { {{0.1f, 0.2f, 0.3f, 1.0f}} };
-    renderPassInfo.clearValueCount = 1;
-    renderPassInfo.pClearValues = &clearColor;
+
+    VkRenderPassBeginInfo renderPassInfo = vkinit::renderpass_begin_info(renderPass, swapChainExtent, swapChainFramebuffers[imageIndex], &clearColor);
+
+
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+
+
+
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 
-    VkBuffer vertexBuffers[] = { vertexBuffer };
+    VkBuffer vertexBuffers[] = { gMesh.vertexBuffer };
     VkDeviceSize offsets[] = { 0 };
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
-    vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+    vkCmdBindIndexBuffer(commandBuffer, gMesh.indexBuffer, 0, VK_INDEX_TYPE_UINT16);
 
 
 
@@ -1188,11 +1248,8 @@ void VulkanBackend::createCommandBuffers() {
     commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
 
 
-    VkCommandBufferAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    allocInfo.commandPool = commandPool;
-    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandBufferCount = (uint32_t)commandBuffers.size();
+    VkCommandBufferAllocateInfo allocInfo = vkinit::command_buffer_allocate_info(commandPool, (uint32_t)commandBuffers.size());
+
 
 
 
@@ -1210,17 +1267,34 @@ void VulkanBackend::createCommandPool() {
     }
 
 
+
+
     QueueFamilyIndices queueFamilyIndices = findQueueFamilies(physicalDevice);
 
-    VkCommandPoolCreateInfo poolInfo{};
-    poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
+
+    VkCommandPoolCreateInfo commandPoolInfo = vkinit::command_pool_create_info(queueFamilyIndices.graphicsFamily.value(), VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 
 
-    if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
+    
+    if (vkCreateCommandPool(device, &commandPoolInfo, nullptr, &commandPool) != VK_SUCCESS) {
         throw std::runtime_error("failed to create command pool!");
     }
+
+    
+    if (enableValidationLayers) {
+
+        VkDebugUtilsObjectNameInfoEXT nameInfo = vkinit::debug_name_create_info(VK_OBJECT_TYPE_COMMAND_POOL, (uint64_t)commandPool, "commandPool");
+
+        PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetInstanceProcAddr(instance, "vkSetDebugUtilsObjectNameEXT");
+
+        if (vkSetDebugUtilsObjectNameEXT) {
+            vkSetDebugUtilsObjectNameEXT(device, &nameInfo);
+        }
+
+
+    }
+    
+
 }
 
 
@@ -1239,21 +1313,31 @@ void VulkanBackend::createFramebuffers() {
             swapChainImageViews[i]
         };
 
-        VkFramebufferCreateInfo framebufferInfo{};
-        framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        framebufferInfo.renderPass = renderPass;
-        framebufferInfo.attachmentCount = 1;
-        framebufferInfo.pAttachments = attachments;
-        framebufferInfo.width = swapChainExtent.width;
-        framebufferInfo.height = swapChainExtent.height;
-        framebufferInfo.layers = 1;
+
+
+        VkFramebufferCreateInfo framebufferInfo = vkinit::framebuffer_create_info(renderPass, swapChainExtent, attachments);
+
 
         if (vkCreateFramebuffer(device, &framebufferInfo, nullptr, &swapChainFramebuffers[i]) != VK_SUCCESS) {
             throw std::runtime_error("failed to create framebuffer!");
         }
+
+
+
+
+        if (enableValidationLayers) {
+
+            VkDebugUtilsObjectNameInfoEXT nameInfo = vkinit::debug_name_create_info(VK_OBJECT_TYPE_FRAMEBUFFER, (uint64_t)swapChainFramebuffers[i], "framebuffer");
+
+            PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetInstanceProcAddr(instance, "vkSetDebugUtilsObjectNameEXT");
+
+            if (vkSetDebugUtilsObjectNameEXT) {
+                vkSetDebugUtilsObjectNameEXT(device, &nameInfo);
+            }
+        }
     }
 
-
+    
 
 }
 
@@ -2065,31 +2149,29 @@ void VulkanBackend:: createLogicalDevice() {
 
     VkPhysicalDeviceFeatures deviceFeatures{};
 
-    VkDeviceCreateInfo createInfo{};
-    createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    VkDeviceCreateInfo createInfo = vkinit::device_create_info(queueCreateInfos, deviceFeatures, deviceExtensions, validationLayers, enableValidationLayers);
 
-    createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
-    createInfo.pQueueCreateInfos = queueCreateInfos.data();
-
-
-
-    createInfo.pEnabledFeatures = &deviceFeatures;
-
-    createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
-    createInfo.ppEnabledExtensionNames = deviceExtensions.data();
-
-    if (enableValidationLayers) {
-        createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
-        createInfo.ppEnabledLayerNames = validationLayers.data();
-    }
-    else {
-        createInfo.enabledLayerCount = 0;
-    }
 
 
     if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) != VK_SUCCESS) {
         throw std::runtime_error("failed to create logical device!");
     }
+
+
+
+    if (enableValidationLayers) {
+
+        VkDebugUtilsObjectNameInfoEXT nameInfo = vkinit::debug_name_create_info(VK_OBJECT_TYPE_DEVICE, (uint64_t)device, "LogicalDevice1");
+
+        PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetInstanceProcAddr(instance, "vkSetDebugUtilsObjectNameEXT");
+
+        if (vkSetDebugUtilsObjectNameEXT) {
+            vkSetDebugUtilsObjectNameEXT(device, &nameInfo);
+        }
+
+
+    }
+
 
     vkGetDeviceQueue(device, indices.presentFamily.value(), 0, &presentQueue);
     vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &graphicsQueue);

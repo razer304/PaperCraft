@@ -2,7 +2,9 @@
 
 
 
-
+# Tell CMake to use vcpkg toolchain if available
+# (adjust path if your vcpkg.cmake is elsewhere)
+set(CMAKE_TOOLCHAIN_FILE "C:/dev/vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE STRING "Vcpkg toolchain file")
 
 
 
@@ -18,17 +20,16 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # --- Dependencies via vcpkg ---
 # These will be resolved automatically if you configured VS with vcpkg toolchain
+# --- Dependencies via vcpkg ---
 find_package(glfw3 CONFIG REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(glad CONFIG REQUIRED)
-
 find_package(imgui CONFIG REQUIRED)
-
 find_package(tinyfiledialogs CONFIG REQUIRED)
-
 find_package(assimp CONFIG REQUIRED)
-
 find_package(glm CONFIG REQUIRED)
+find_package(VulkanMemoryAllocator CONFIG REQUIRED)
+
 
 #find_package(Vulkan REQUIRED)
 
@@ -39,6 +40,7 @@ set(SOURCES
     ${CMAKE_SOURCE_DIR}/PaperCraft/src/main.cpp
     ${CMAKE_SOURCE_DIR}/PaperCraft/src/VulkanBackend.cpp
     ${CMAKE_SOURCE_DIR}/PaperCraft/src/ModelLoader.cpp
+    ${CMAKE_SOURCE_DIR}/PaperCraft/src/vk_initializers.cpp
 
 )
 
@@ -47,6 +49,8 @@ set(HEADERS
     ${CMAKE_SOURCE_DIR}/PaperCraft/src/ModelLoader.h
     ${CMAKE_SOURCE_DIR}/PaperCraft/src/Mesh.h
     ${CMAKE_SOURCE_DIR}/PaperCraft/src/Edge.h
+    ${CMAKE_SOURCE_DIR}/PaperCraft/src/vk_initializers.h
+    ${CMAKE_SOURCE_DIR}/PaperCraft/src/vk_types.h
 
 )
 
@@ -60,18 +64,18 @@ set(HEADERS
 
 
 
-#add_executable(PaperCraftApp ${SOURCES} ${HEADERS} "PaperCraft/src/vk_initializers.cpp" "PaperCraft/src/vk_initializers.h")
+add_executable(PaperCraftApp ${SOURCES} ${HEADERS})
+
+
+
+target_include_directories(PaperCraftApp PRIVATE
+    ${CMAKE_SOURCE_DIR}/PaperCraft/src
+)
 
 
 
 
 
-
-
-# Tell CMake to use vcpkg toolchain if available
-# (adjust path if your vcpkg.cmake is elsewhere)
-set(CMAKE_TOOLCHAIN_FILE "C:/dev/vcpkg/scripts/buildsystems/vcpkg.cmake"
-    CACHE STRING "Vcpkg toolchain file")
 
 # Try to find Vulkan via the official SDK first
 find_package(Vulkan QUIET)
@@ -105,13 +109,15 @@ target_link_libraries(PaperCraftApp
     PRIVATE
         glfw
         OpenGL::GL
-        glad::glad          # only if using glad
+        glad::glad
         imgui::imgui
+        #imgui:x64-windows
         tinyfiledialogs::tinyfiledialogs
         assimp::assimp
         glm::glm
-#        Vulkan::Vulkan
+        GPUOpen::VulkanMemoryAllocator
 )
+
 
 
 # Shader compilation

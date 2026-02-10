@@ -5,24 +5,30 @@
 
 #include <vk_types.h>
 
+#include <vector>
+//#include <cstdint> // Necessary for uint32_t
+
+
 namespace vkinit {
+	VkDebugUtilsObjectNameInfoEXT debug_name_create_info(VkObjectType type, uint64_t object, const char* name);
+
 	VkCommandPoolCreateInfo command_pool_create_info(uint32_t queueFamilyIndex, VkCommandPoolCreateFlags flags = 0);
 
 	VkCommandBufferAllocateInfo command_buffer_allocate_info(VkCommandPool pool, uint32_t count = 1, VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
 	VkCommandBufferBeginInfo command_buffer_begin_info(VkCommandBufferUsageFlags flags = 0);
 
-	VkFramebufferCreateInfo framebuffer_create_info(VkRenderPass renderPass, VkExtent2D extent);
+	VkFramebufferCreateInfo framebuffer_create_info(VkRenderPass renderPass, VkExtent2D extent, VkImageView* attachments);
 
 	VkFenceCreateInfo fence_create_info(VkFenceCreateFlags flags = 0);
 
 	VkSemaphoreCreateInfo semaphore_create_info(VkSemaphoreCreateFlags flags = 0);
 
-	VkSubmitInfo submit_info(VkCommandBuffer* cmd);
+	VkSubmitInfo submit_info(VkCommandBuffer* cmd, VkSemaphore waitSemaphores[], VkSemaphore signalSemaphores[], VkPipelineStageFlags waitStages[]);
 
-	VkPresentInfoKHR present_info();
+	VkPresentInfoKHR present_info(VkSwapchainKHR swapChains[], VkSemaphore signalSemaphores[], uint32_t* imageIndex);
 
-	VkRenderPassBeginInfo renderpass_begin_info(VkRenderPass renderPass, VkExtent2D windowExtent, VkFramebuffer framebuffer);
+	VkRenderPassBeginInfo renderpass_begin_info(VkRenderPass renderPass, VkExtent2D windowExtent, VkFramebuffer framebuffer, VkClearValue* clearColor);
 
 	VkPipelineShaderStageCreateInfo pipeline_shader_stage_create_info(VkShaderStageFlagBits stage, VkShaderModule shaderModule);
 
@@ -48,8 +54,22 @@ namespace vkinit {
 
 	VkWriteDescriptorSet write_descriptor_buffer(VkDescriptorType type, VkDescriptorSet dstSet, VkDescriptorBufferInfo* bufferInfo, uint32_t binding);
 
-	VkWriteDescriptorSet write_descriptor_image(VkDescriptorType type, VkDescriptorSet dstSet, VkDescriptorImageInfo* imageInfo, uint32_t binding);
+	VkWriteDescriptorSet write_descriptor_image(
+		VkDescriptorType type, 
+		VkDescriptorSet dstSet, 
+		VkDescriptorImageInfo* imageInfo, 
+		uint32_t binding);
 
-	VkSamplerCreateInfo sampler_create_info(VkFilter filters, VkSamplerAddressMode samplerAdressMode = VK_SAMPLER_ADDRESS_MODE_REPEAT);
+	VkSamplerCreateInfo sampler_create_info(
+		VkFilter filters, 
+		VkSamplerAddressMode samplerAdressMode = VK_SAMPLER_ADDRESS_MODE_REPEAT);
+
+	VkDeviceCreateInfo device_create_info(
+		const std::vector<VkDeviceQueueCreateInfo>& queueCreateInfos,
+		const VkPhysicalDeviceFeatures& deviceFeatures,
+		const std::vector<const char*>& deviceExtensions,
+		const std::vector<const char*>& validationLayers,
+		bool enableValidationLayers);
+
 }
 
