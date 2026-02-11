@@ -118,7 +118,7 @@ private:
 		std::vector<VkPresentModeKHR> presentModes;
 	};
 
-
+	/*
 	struct Vertex {
 		glm::vec2 pos;
 		glm::vec3 color;
@@ -152,11 +152,7 @@ private:
 
 
 	};
-
-	
-	const std::vector<Vertex> vertices = {
-		{{0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}}
-	};
+	*/
 	
 
 	//make sure the data is aligned
@@ -235,7 +231,7 @@ private:
 	VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
 	VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
 
-	void createVertexBuffer();
+	
 
 	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
@@ -243,7 +239,8 @@ private:
 
 	void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 
-	void createIndexBuffer();
+
+	
 
 	void createDescriptorSetLayout();
 
@@ -324,9 +321,10 @@ private:
 	VkDescriptorPool imguiPool;
 
 
-	
+	//added normals and it broke display, attrs was size 1 instead of 2 and the attrs[1] was added, also normal thingy
 	struct MeshVertex {
 		glm::vec3 pos;
+		glm::vec3 normal;
 
 		static VkVertexInputBindingDescription getBindingDescription() {
 			VkVertexInputBindingDescription binding{};
@@ -336,13 +334,18 @@ private:
 			return binding;
 		}
 
-		static std::array<VkVertexInputAttributeDescription, 1> getAttributeDescriptions() {
-			std::array<VkVertexInputAttributeDescription, 1> attrs{};
+		static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions() {
+			std::array<VkVertexInputAttributeDescription, 2> attrs{};
 
 			attrs[0].binding = 0;
 			attrs[0].location = 0;
 			attrs[0].format = VK_FORMAT_R32G32B32_SFLOAT;
 			attrs[0].offset = offsetof(MeshVertex, pos);
+
+			attrs[1].binding = 0; 
+			attrs[1].location = 1; 
+			attrs[1].format = VK_FORMAT_R32G32B32_SFLOAT; 
+			attrs[1].offset = offsetof(MeshVertex, normal);
 
 			return attrs;
 		}
@@ -360,7 +363,8 @@ private:
 		uint32_t indexCount = 0;
 	};
 
-	
+	void createVertexBuffer(Mesh& result, aiMesh* mesh);
+	void createIndexBuffer(Mesh& result, aiMesh* mesh);
 
 	struct Edge {
 		glm::vec3 v1;
