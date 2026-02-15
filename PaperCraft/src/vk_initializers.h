@@ -10,6 +10,8 @@
 
 
 namespace vkinit {
+
+
 	VkDebugUtilsObjectNameInfoEXT debug_name_create_info(VkObjectType type, uint64_t object, const char* name);
 
 	VkCommandPoolCreateInfo command_pool_create_info(uint32_t queueFamilyIndex, VkCommandPoolCreateFlags flags = 0);
@@ -36,7 +38,14 @@ namespace vkinit {
 
 	VkPipelineInputAssemblyStateCreateInfo input_assembly_create_info(VkPrimitiveTopology topology);
 
-	VkPipelineRasterizationStateCreateInfo rasterization_state_create_info(VkPolygonMode polygonMode);
+	//VkPipelineRasterizationStateCreateInfo rasterization_state_create_info(VkPolygonMode polygonMode);
+
+	VkPipelineRasterizationStateCreateInfo rasterization_state_filled_create_info();
+	VkPipelineRasterizationStateCreateInfo rasterization_state_lined_create_info(uint32_t linewidth);
+	VkPipelineRasterizationStateCreateInfo rasterization_state_point_create_info();
+
+
+
 
 	VkPipelineMultisampleStateCreateInfo multisampling_state_create_info();
 

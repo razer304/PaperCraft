@@ -133,17 +133,30 @@ void VulkanBackend::cleanupVulkan() {
     vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 
 
-    vkDestroyBuffer(device, gMesh.indexBuffer, nullptr);
-    vkFreeMemory(device, gMesh.indexMemory, nullptr);
+    vkDestroyBuffer(device, gMesh.unjoinedindexBuffer, nullptr);
+    vkFreeMemory(device, gMesh.unjoinedindexMemory, nullptr);
 
-    vkDestroyBuffer(device, gMesh.vertexBuffer, nullptr);
-    vkFreeMemory(device, gMesh.vertexMemory, nullptr);
+    vkDestroyBuffer(device, gMesh.joinedindexBuffer, nullptr);
+    vkFreeMemory(device, gMesh.joinedindexMemory, nullptr);
+
+    vkDestroyBuffer(device, gMesh.indexSelectorBuffer, nullptr);
+    vkFreeMemory(device, gMesh.indexSelectorMemory, nullptr);
+
+
+    vkDestroyBuffer(device, gMesh.joinedvertexBuffer, nullptr);
+    vkFreeMemory(device, gMesh.joinedvertexMemory, nullptr);
+
+
+    vkDestroyBuffer(device, gMesh.unjoinedvertexBuffer, nullptr);
+    vkFreeMemory(device, gMesh.unjoinedvertexMemory, nullptr);
 
     
 
     
 
-    vkDestroyPipeline(device, graphicsPipeline, nullptr);
+    vkDestroyPipeline(device, graphicsPipeline_Filled, nullptr);
+    vkDestroyPipeline(device, graphicsPipeline_Line, nullptr);
+
     vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 
     vkDestroyRenderPass(device, renderPass, nullptr);
@@ -174,7 +187,7 @@ void VulkanBackend::cleanupVulkan() {
 void VulkanBackend::drawFrame() {
 
     if (enableValidationLayers) {
-        std::cout << "- drawFrame " << currentFrame << std::endl;
+        //std::cout << "- drawFrame " << currentFrame << std::endl;
     }
 
     
@@ -288,8 +301,32 @@ void VulkanBackend::onMouseButton(int button, int action, int mods) {
             double dist = sqrt(dx * dx + dy * dy);
 
             if (dist < CLICK_THRESHOLD && modelLoaded) {
-                int picked = 0;
-                gEdgeList[picked].cut = !gEdgeList[picked].cut;
+                
+                int edgeindex = pickEdge(releaseX, releaseY);
+
+                if (edgeindex >= 0) {
+
+                    uint32_t i0 = gMesh.unjoinedIndicesCPU[edgeindex];
+                    uint32_t i1 = gMesh.unjoinedIndicesCPU[(edgeindex + 1) % 3 == 0 ? edgeindex - 2 : edgeindex + 1];
+
+
+                    uint32_t* data;
+                    vkMapMemory(device, gMesh.indexSelectorMemory, 0, VK_WHOLE_SIZE, 0, (void**)&data);
+
+
+                    data[i0] = data[i0] ? 0 : 1;
+                    data[i1] = data[i1] ? 0 : 1;
+
+                    std::cout << "edge index hit point a!  " << i0 << std::endl;
+                    std::cout << "edge index hit point b!  " << i1 << std::endl;
+
+                    vkUnmapMemory(device, gMesh.indexSelectorMemory);
+                }
+
+
+
+
+
             }
         }
     }
@@ -328,27 +365,101 @@ void VulkanBackend::onCursorMove(double xpos, double ypos) {
 }
 
 
-int VulkanBackend::pickEdge(double mouseX, double mouseY, int screenWidth, int screenHeight, glm::mat4 viewProj) {
+int VulkanBackend::pickEdge(double mouseX, double mouseY) {
     // Convert mouse coords to NDC
-    float ndcX = (2.0f * mouseX) / screenWidth - 1.0f;
-    float ndcY = 1.0f - (2.0f * mouseY) / screenHeight;
+    float ndcX = (2.0f * mouseX) / swapChainExtent.width - 1.0f;
+    float ndcY = 1.0f - (2.0f * mouseY) / swapChainExtent.height;
 
     // Ray in clip space
     glm::vec4 rayClip(ndcX, ndcY, -1.0f, 1.0f);
 
     // Transform to world space
-    glm::vec4 rayEye = glm::inverse(viewProj) * rayClip;
+    glm::vec4 rayEye = glm::inverse(uboCPU.proj) * rayClip;
     rayEye = glm::vec4(rayEye.x, rayEye.y, -1.0f, 0.0f);
-    glm::vec3 rayWorld = glm::normalize(glm::vec3(rayEye));
 
-    // Test against each edge
-    for (int i = 0; i < gEdgeList.size(); i++) {
-        //float dist = distanceRayToSegment(cameraPos, rayWorld, gEdgeList[i].v1, gEdgeList[i].v2);
-        float dist = 0.0f; // placeholder
-        if (dist < 0.05f) return i; // threshold
+
+    glm::vec3 rayDir = glm::normalize(glm::vec3(glm::inverse(uboCPU.view) * rayEye));
+
+    glm::vec3 rayOrigin = glm::vec3(glm::inverse(uboCPU.view)[3]);
+
+
+
+    int closestEdge = -1;
+    float closestDist = 1e9f;
+
+    for (uint32_t i = 0; i < gMesh.indexCount; i += 3) {
+        uint32_t i0 = gMesh.unjoinedIndicesCPU[i + 0];
+        uint32_t i1 = gMesh.unjoinedIndicesCPU[i + 1];
+        uint32_t i2 = gMesh.unjoinedIndicesCPU[i + 2];
+
+        glm::vec3 a0 = gMesh.unjoinedVerticesCPU[i0].pos;
+        glm::vec3 a1 = gMesh.unjoinedVerticesCPU[i1].pos;
+        glm::vec3 a2 = gMesh.unjoinedVerticesCPU[i2].pos;
+
+        float dist;
+
+        // test edge 0–1
+        if (rayHitsEdge(rayOrigin, rayDir, a0, a1, 5.0f, dist) && dist < closestDist) {
+            closestDist = dist;
+            closestEdge = i + 0;   // index of this edge
+        }
+
+        // test edge 1–2
+        if (rayHitsEdge(rayOrigin, rayDir, a1, a2, 5.0f, dist) && dist < closestDist) {
+            closestDist = dist;
+            closestEdge = i + 1;
+        }
+
+        // test edge 2–0
+        if (rayHitsEdge(rayOrigin, rayDir, a2, a0, 5.0f, dist) && dist < closestDist) {
+            closestDist = dist;
+            closestEdge = i + 2;
+        }
     }
-    return -1;
+
+
+
+    return closestEdge;
+
 }
+
+
+bool VulkanBackend::rayHitsEdge(
+    glm::vec3 rayOrigin,
+    glm::vec3 rayDir,
+    glm::vec3 a,
+    glm::vec3 b,
+    float threshold,
+    float& outDist)
+{
+    glm::vec3 ab = b - a;
+    glm::vec3 ao = rayOrigin - a;
+
+    float abDot = glm::dot(ab, ab);
+    float abRay = glm::dot(ab, rayDir);
+
+    float denom = abDot * 1.0f - abRay * abRay;
+    if (fabs(denom) < 1e-6f) return false;
+
+    float t = (glm::dot(ab, ao) * 1.0f - glm::dot(rayDir, ao) * abRay) / denom;
+    float u = (glm::dot(ab, ao) + t * abRay) / abDot;
+
+    if (t < 0.0f || u < 0.0f || u > 1.0f) return false;
+
+    glm::vec3 closestPoint = rayOrigin + t * rayDir;
+    glm::vec3 pointOnSegment = a + u * ab;
+
+    float dist = glm::length(closestPoint - pointOnSegment);
+    if (dist < threshold) {
+        outDist = t;
+        return true;
+    }
+
+    return false;
+}
+
+
+
 
 
 
@@ -439,7 +550,7 @@ void VulkanBackend::initImGui() {
 void VulkanBackend::buildImGui() {
 
     if (enableValidationLayers) {
-        std::cout << "- buildImGui " << std::endl;
+        //std::cout << "- buildImGui " << std::endl;
     }
 
 
@@ -461,6 +572,9 @@ void VulkanBackend::buildImGui() {
         if (file) {
             std::cout << "Selected 3D File: " << file << std::endl;
             gMesh = loadMesh(file);
+
+            VkDeviceSize selectorSize = gMesh.indexCount * sizeof(uint32_t);
+            updateSelectorDescriptors(selectorSize);
 
         }
     }
@@ -540,7 +654,7 @@ VulkanBackend::Mesh VulkanBackend::loadMesh(const char* path) {
     }
 
     Assimp::Importer importer;
-    const aiScene* scene = importer.ReadFile(
+    const aiScene* unjoinedscene = importer.ReadFile(
         path,
         aiProcess_Triangulate |
         aiProcess_FixInfacingNormals |
@@ -548,26 +662,45 @@ VulkanBackend::Mesh VulkanBackend::loadMesh(const char* path) {
         aiProcess_GenNormals
     );
     
-
+    const aiScene* joinedscene = importer.ReadFile(
+        path,
+        aiProcess_Triangulate |
+        aiProcess_FixInfacingNormals |
+        aiProcess_SortByPType |
+        aiProcess_GenNormals |
+        aiProcess_JoinIdenticalVertices
+    );
     
 
     VulkanBackend::Mesh result{}; // make sure this exists before use
 
-    if (!scene || !scene->HasMeshes()) {
+    /*
+    if (!unjoinedscene || !unjoinedscene->HasMeshes()) {
         std::cerr << "Failed to load mesh: " << path << std::endl;
         return result;
     }
+    */
 
-    aiMesh* mesh = scene->mMeshes[0]; // just take the first mesh
 
+    aiMesh* unjoinedmesh = unjoinedscene->mMeshes[0]; // just take the first mesh
+    aiMesh* joinedmesh = joinedscene->mMeshes[0];
 
     //i wanna have one vertex buffer with all seperate vertexs and also one where they are the same vertexs
-    //i might be able to do this by just changeing index buffer
+    //i might be able to do this by just changeing index buffer actually
 
-    createVertexBuffer(result, mesh);
-    createIndexBuffer(result, mesh);
+    //i want to pick an edge and have both of those indexs switch between 1 and 2 vertexs
+
+    //actually that will probs need two index buffers and a boolean for which one to use for display?
+    //yes that seems best
+    //and an array the same length as index buffer but booleans instead of numbers, for which one to use for unwrapping
+    //and to test i can use colours
 
 
+    createVertexBuffer(result, unjoinedmesh, joinedmesh);
+    createIndexBuffer(result, unjoinedmesh, joinedmesh);
+
+
+    
 
     // --- Final mesh info ---
     
@@ -577,95 +710,238 @@ VulkanBackend::Mesh VulkanBackend::loadMesh(const char* path) {
 }
 
 
-void VulkanBackend::createVertexBuffer(Mesh& result, aiMesh* mesh) {
+void VulkanBackend::createVertexBuffer(Mesh& result, aiMesh* unjoinedmesh, aiMesh* joinedmesh) {
 
     if (enableValidationLayers) {
         std::cout << "- createVertexBuffer " << std::endl;
     }
 
 
-    // Collect vertices (x,y,z as floats)
-    std::vector<MeshVertex> vertices;
-    vertices.reserve(mesh->mNumVertices * 3);
+    // Collect joined vertices (x,y,z as floats)
+    std::vector<MeshVertex> joinedvertices;
+    joinedvertices.reserve(joinedmesh->mNumVertices * 3);
 
 
-    for (unsigned int i = 0; i < mesh->mNumVertices; i++) {
+    for (unsigned int i = 0; i < joinedmesh->mNumVertices; i++) {
         MeshVertex v{};
         v.pos = glm::vec3(
-            mesh->mVertices[i].x,
-            mesh->mVertices[i].y,
-            mesh->mVertices[i].z);
+            joinedmesh->mVertices[i].x,
+            joinedmesh->mVertices[i].y,
+            joinedmesh->mVertices[i].z);
         v.normal = glm::vec3(
-            mesh->mNormals[i].x,
-            mesh->mNormals[i].y,
-            mesh->mNormals[i].z);
+            joinedmesh->mNormals[i].x,
+            joinedmesh->mNormals[i].y,
+            joinedmesh->mNormals[i].z);
 
-        vertices.push_back(v);
+        joinedvertices.push_back(v);
 
         
     }
 
+    result.joinedVerticesCPU = joinedvertices;
+
+    // Collect vertices (x,y,z as floats)
+    std::vector<MeshVertex> unjoinedvertices;
+    unjoinedvertices.reserve(unjoinedmesh->mNumVertices * 3);
+
+
+    for (unsigned int i = 0; i < unjoinedmesh->mNumVertices; i++) {
+        MeshVertex v{};
+        v.pos = glm::vec3(
+            unjoinedmesh->mVertices[i].x,
+            unjoinedmesh->mVertices[i].y,
+            unjoinedmesh->mVertices[i].z);
+        v.normal = glm::vec3(
+            unjoinedmesh->mNormals[i].x,
+            unjoinedmesh->mNormals[i].y,
+            unjoinedmesh->mNormals[i].z);
+
+        unjoinedvertices.push_back(v);
+
+
+    }
+
 
     
+    result.unjoinedVerticesCPU = unjoinedvertices;
+    
 
+	//joined vertex buffer
+    VkDeviceSize joinvertexSize = joinedvertices.size() * sizeof(MeshVertex);
 
-    VkDeviceSize vertexSize = vertices.size() * sizeof(MeshVertex);
-
-    VkBuffer stagingBuffer;
-    VkDeviceMemory stagingMemory;
+    VkBuffer joinstagingBuffer;
+    VkDeviceMemory joinstagingMemory;
 
     createBuffer(
-        vertexSize,
+        joinvertexSize,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        stagingBuffer,
-        stagingMemory
+        joinstagingBuffer,
+        joinstagingMemory
     );
 
-    void* data;
-    vkMapMemory(device, stagingMemory, 0, vertexSize, 0, &data);
-    memcpy(data, vertices.data(), static_cast<size_t>(vertexSize));
-    vkUnmapMemory(device, stagingMemory);
+    void* joineddata;
+    vkMapMemory(device, joinstagingMemory, 0, joinvertexSize, 0, &joineddata);
+    memcpy(joineddata, joinedvertices.data(), static_cast<size_t>(joinvertexSize));
+    vkUnmapMemory(device, joinstagingMemory);
 
     createBuffer(
-        vertexSize,
+        joinvertexSize,
         VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        result.vertexBuffer,
-        result.vertexMemory
+        result.joinedvertexBuffer,
+        result.joinedvertexMemory
     );
 
-    copyBuffer(stagingBuffer, result.vertexBuffer, vertexSize);
+    copyBuffer(joinstagingBuffer, result.joinedvertexBuffer, joinvertexSize);
 
-    vkDestroyBuffer(device, stagingBuffer, nullptr);
-    vkFreeMemory(device, stagingMemory, nullptr);
+    vkDestroyBuffer(device, joinstagingBuffer, nullptr);
+    vkFreeMemory(device, joinstagingMemory, nullptr);
+
+
+	//unjoined vertex buffer
+    VkDeviceSize unjoinvertexSize = unjoinedvertices.size() * sizeof(MeshVertex);
+
+    VkBuffer unjoinstagingBuffer;
+    VkDeviceMemory unjoinstagingMemory;
+
+    createBuffer(
+        unjoinvertexSize,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        unjoinstagingBuffer,
+        unjoinstagingMemory
+    );
+
+    void* unjoineddata;
+    vkMapMemory(device, unjoinstagingMemory, 0, unjoinvertexSize, 0, &unjoineddata);
+    memcpy(unjoineddata, unjoinedvertices.data(), static_cast<size_t>(unjoinvertexSize));
+    vkUnmapMemory(device, unjoinstagingMemory);
+
+    createBuffer(
+        unjoinvertexSize,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        result.unjoinedvertexBuffer,
+        result.unjoinedvertexMemory
+    );
+
+    copyBuffer(unjoinstagingBuffer, result.unjoinedvertexBuffer, unjoinvertexSize);
+
+    vkDestroyBuffer(device, unjoinstagingBuffer, nullptr);
+    vkFreeMemory(device, unjoinstagingMemory, nullptr);
+
+
+
 
 }
 
 
 
-void VulkanBackend::createIndexBuffer(Mesh& result, aiMesh* mesh) {
+void VulkanBackend::createIndexBuffer(Mesh& result, aiMesh* mesh, aiMesh* joinedmesh) {
 
     if (enableValidationLayers) {
         std::cout << "- createIndexBuffer " << std::endl;
     }
 
     // Collect indices
-    std::vector<uint32_t> indices;
-    indices.reserve(mesh->mNumFaces * 3);
+    std::vector<uint32_t> unjoinedindices;
+    unjoinedindices.reserve(mesh->mNumFaces * 3);
     for (unsigned int i = 0; i < mesh->mNumFaces; i++) {
         aiFace face = mesh->mFaces[i];
         for (unsigned int j = 0; j < face.mNumIndices; j++) {
-            indices.push_back(face.mIndices[j]);
+            unjoinedindices.push_back(face.mIndices[j]);
         }
     }
 
+    std::vector<uint32_t> joinedindices;
+    joinedindices.reserve(mesh->mNumFaces * 3);
+    for (unsigned int i = 0; i < mesh->mNumFaces; i++) {
+        aiFace face = mesh->mFaces[i];
+        for (unsigned int j = 0; j < face.mNumIndices; j++) {
+            joinedindices.push_back(face.mIndices[j]);
+        }
+    }
+
+    result.joinedIndicesCPU = joinedindices;
+    result.unjoinedIndicesCPU = unjoinedindices;
+
+
+    result.indexCount = static_cast<uint32_t>(joinedindices.size());
+
+
+    //selector buffer creation
+    std::vector<uint32_t> selector(result.indexCount, 1);
+
+
+    VkDeviceSize selectorSize = (result.indexCount + 1) * sizeof(uint32_t);
+
+    createBuffer(
+        selectorSize,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, // or whatever you bind it as
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        result.indexSelectorBuffer,
+        result.indexSelectorMemory
+    );
+
+    // Initialize to zero
+    void* data;
+    vkMapMemory(device, result.indexSelectorMemory, 0, selectorSize, 0, &data);
+    //memset(data, 1, selectorSize);
+    auto* check = static_cast<uint32_t*>(data);
+
+    std::cout << "selector[0] CPU = " << check[0] << std::endl;
+
+    memcpy(data, selector.data(), selectorSize);
+
+    check = static_cast<uint32_t*>(data); 
+
+    std::cout << "selector[0] CPU = " << check[0] << std::endl;
+
+    vkUnmapMemory(device, result.indexSelectorMemory);
 
 
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingMemory;
 
-    VkDeviceSize indexSize = indices.size() * sizeof(uint32_t);
+    VkDeviceSize indexSize = unjoinedindices.size() * sizeof(uint32_t);
+
+
+
+
+
+
+
+	//unjoined index buffer creatign
+    createBuffer(
+        indexSize,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        stagingBuffer,
+        stagingMemory
+    );
+
+
+    void* unjoineddata;
+    vkMapMemory(device, stagingMemory, 0, indexSize, 0, &unjoineddata);
+    memcpy(unjoineddata, unjoinedindices.data(), static_cast<size_t>(indexSize));
+    vkUnmapMemory(device, stagingMemory);
+
+    createBuffer(
+        indexSize,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        result.unjoinedindexBuffer,
+        result.unjoinedindexMemory
+    );
+
+    copyBuffer(stagingBuffer, result.unjoinedindexBuffer, indexSize);
+
+    
+    vkDestroyBuffer(device, stagingBuffer, nullptr);
+    vkFreeMemory(device, stagingMemory, nullptr);
+
+	//joined index buffer
 
     createBuffer(
         indexSize,
@@ -676,30 +952,68 @@ void VulkanBackend::createIndexBuffer(Mesh& result, aiMesh* mesh) {
     );
 
 
-    void* data;
-    vkMapMemory(device, stagingMemory, 0, indexSize, 0, &data);
-    memcpy(data, indices.data(), static_cast<size_t>(indexSize));
+    void* joineddata;
+    vkMapMemory(device, stagingMemory, 0, indexSize, 0, &joineddata);
+    memcpy(joineddata, joinedindices.data(), static_cast<size_t>(indexSize));
     vkUnmapMemory(device, stagingMemory);
 
     createBuffer(
         indexSize,
         VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        result.indexBuffer,
-        result.indexMemory
+        result.joinedindexBuffer,
+        result.joinedindexMemory
     );
 
-    copyBuffer(stagingBuffer, result.indexBuffer, indexSize);
+    copyBuffer(stagingBuffer, result.joinedindexBuffer, indexSize);
+
 
     vkDestroyBuffer(device, stagingBuffer, nullptr);
     vkFreeMemory(device, stagingMemory, nullptr);
 
-    result.indexCount = static_cast<uint32_t>(indices.size());
+
+
+    
 }
 
 
 
 //vulkan stuffs
+
+
+void VulkanBackend::updateSelectorDescriptors(VkDeviceSize selectorSize) {
+    for (size_t i = 0; i < descriptorSets.size(); i++) {
+        VkDescriptorBufferInfo uboInfo{};
+        uboInfo.buffer = uniformBuffers[i];
+        uboInfo.offset = 0;
+        uboInfo.range = sizeof(UniformBufferObject); // use your actual UBO type
+
+        VkDescriptorBufferInfo selectorInfo{};
+        selectorInfo.buffer = gMesh.indexSelectorBuffer;
+        selectorInfo.offset = 0;
+        selectorInfo.range = selectorSize;
+
+        std::array<VkWriteDescriptorSet, 2> writes{};
+
+        writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[0].dstSet = descriptorSets[i];
+        writes[0].dstBinding = 0;
+        writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        writes[0].descriptorCount = 1;
+        writes[0].pBufferInfo = &uboInfo;
+
+        writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[1].dstSet = descriptorSets[i];
+        writes[1].dstBinding = 1;
+        writes[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        writes[1].descriptorCount = 1;
+        writes[1].pBufferInfo = &selectorInfo;
+
+        vkUpdateDescriptorSets(device, writes.size(), writes.data(), 0, nullptr);
+    }
+}
+
+
 
 
 void VulkanBackend::createDescriptorSets() {
@@ -727,6 +1041,13 @@ void VulkanBackend::createDescriptorSets() {
         bufferInfo.offset = 0;
         bufferInfo.range = sizeof(UniformBufferObject);
 
+        VkDescriptorBufferInfo selectorInfo{};
+        selectorInfo.buffer = gMesh.indexSelectorBuffer;
+        selectorInfo.offset = 0;
+        selectorInfo.range = VK_WHOLE_SIZE;
+
+
+/*
         VkWriteDescriptorSet descriptorWrite{};
         descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptorWrite.dstSet = descriptorSets[i];
@@ -738,7 +1059,29 @@ void VulkanBackend::createDescriptorSets() {
         descriptorWrite.pImageInfo = nullptr; // Optional
         descriptorWrite.pTexelBufferView = nullptr; // Optional
 
-        vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
+
+
+        vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);*/
+
+
+		std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
+
+		descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrites[0].dstSet = descriptorSets[i];
+		descriptorWrites[0].dstBinding = 0;
+		descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		descriptorWrites[0].descriptorCount = 1;
+		descriptorWrites[0].pBufferInfo = &bufferInfo;
+
+
+        descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrites[1].dstSet = descriptorSets[i];
+        descriptorWrites[1].dstBinding = 1;
+        descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        descriptorWrites[1].descriptorCount = 1;
+        descriptorWrites[1].pBufferInfo = &selectorInfo;
+
+        vkUpdateDescriptorSets(device, descriptorWrites.size(), descriptorWrites.data(), 0, nullptr);
 
     }
 }
@@ -770,7 +1113,7 @@ void VulkanBackend::createDescriptorPool() {
 }
 
 void VulkanBackend::updateUniformBuffer(uint32_t currentImage) {
-    UniformBufferObject ubo{};
+    //UniformBufferObject ubo{};
 
     // --- MODEL TRANSFORM ---
     glm::mat4 model = glm::mat4(1.0f);
@@ -785,26 +1128,26 @@ void VulkanBackend::updateUniformBuffer(uint32_t currentImage) {
     // Apply user-controlled panning
     model = glm::translate(model, glm::vec3(gPanX, gPanY, 0.0f));
 
-    ubo.model = model;
+    uboCPU.model = model;
 
     // --- VIEW MATRIX ---
-    ubo.view = glm::lookAt(
+    uboCPU.view = glm::lookAt(
         glm::vec3(0.0f, 0.0f, 3.0f),   // camera position
         glm::vec3(0.0f, 0.0f, 0.0f),   // look at origin
         glm::vec3(0.0f, 1.0f, 0.0f)    // up
     );
 
     // --- PROJECTION MATRIX ---
-    ubo.proj = glm::perspective(
+    uboCPU.proj = glm::perspective(
         glm::radians(45.0f),
         swapChainExtent.width / (float)swapChainExtent.height,
         0.1f,
         100.0f
     );
-    ubo.proj[1][1] *= -1; // Vulkan Y flip
+    uboCPU.proj[1][1] *= -1; // Vulkan Y flip
 
     // Copy to GPU
-    memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
+    memcpy(uniformBuffersMapped[currentImage], &uboCPU, sizeof(uboCPU));
 }
 
 
@@ -844,12 +1187,27 @@ void VulkanBackend::createDescriptorSetLayout() {
     uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
     uboLayoutBinding.pImmutableSamplers = nullptr; // Optional
+ 
+
+
+    VkDescriptorSetLayoutBinding selectLayoutBinding{};
+    selectLayoutBinding.binding = 1;
+    selectLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    selectLayoutBinding.descriptorCount = 1;
+
+    selectLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+    selectLayoutBinding.pImmutableSamplers = nullptr; // Optional
+
+	std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, selectLayoutBinding };
+
+
 
 
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layoutInfo.bindingCount = 1;
-    layoutInfo.pBindings = &uboLayoutBinding;
+    layoutInfo.bindingCount = bindings.size();
+    layoutInfo.pBindings = bindings.data();
 
     if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
         throw std::runtime_error("failed to create descriptor set layout!");
@@ -1042,7 +1400,7 @@ void VulkanBackend::createSyncObjects() {
 void VulkanBackend::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
 
     if (enableValidationLayers) {
-        std::cout << "- recordCommandBuffer " << std::endl;
+        //std::cout << "- recordCommandBuffer " << std::endl;
     }
 
 
@@ -1062,7 +1420,7 @@ void VulkanBackend::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t 
 	buildImGui();
 
     if (enableValidationLayers) {
-        std::cout << "- after buildImGui" << std::endl;
+        //std::cout << "- after buildImGui" << std::endl;
     }
 
     VkClearValue clearColor = { {{0.1f, 0.2f, 0.3f, 1.0f}} };
@@ -1074,12 +1432,13 @@ void VulkanBackend::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 
+    
+    
 
 
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 
-    VkBuffer vertexBuffers[] = { gMesh.vertexBuffer };
-    VkDeviceSize offsets[] = { 0 };
+    //VkBuffer vertexBuffers[] = { gMesh.unjoinedvertexBuffer};
+    //VkDeviceSize offsets[] = { 0 };
 
 
     //moved these two over too if model loaded since they null otherwise
@@ -1111,9 +1470,15 @@ void VulkanBackend::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t 
     // Bind the mesh loaded from Assimp
     if (modelLoaded) {
         VkDeviceSize offsets[] = { 0 };
-        vkCmdBindVertexBuffers(commandBuffer, 0, 1, &gMesh.vertexBuffer, offsets);
 
-        vkCmdBindIndexBuffer(commandBuffer, gMesh.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+        //choose which index buffer to use based on selector array
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, &gMesh.unjoinedvertexBuffer, offsets);
+        vkCmdBindIndexBuffer(commandBuffer, gMesh.unjoinedindexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+        //vkCmdBindVertexBuffers(commandBuffer, 0, 1, &gMesh.unjoinedvertexBuffer, offsets);
+        //vkCmdBindIndexBuffer(commandBuffer, gMesh.unjoinedindexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
 
         vkCmdBindDescriptorSets(
             commandBuffer,
@@ -1126,7 +1491,30 @@ void VulkanBackend::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t 
             nullptr
         );
 
+
+        //std::cout << "- prebind1" << std::endl;
+
+
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline_Filled);
+
+        //std::cout << "- predraw1" << std::endl;
+
+
         vkCmdDrawIndexed(commandBuffer, gMesh.indexCount, 1, 0, 0, 0);
+
+        //std::cout << "- prebind2" << std::endl;
+
+
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline_Line);
+
+        //std::cout << "- predraw2" << std::endl;
+
+
+
+        vkCmdDrawIndexed(commandBuffer, gMesh.indexCount, 1, 0, 0, 0);
+
+
+
     }
 
 
@@ -1357,12 +1745,14 @@ void VulkanBackend::createGraphicsPipeline() {
 
 
     auto vertShaderCode = readFile(vertexShaderPath);
-    auto fragShaderCode = readFile(fragmentShaderPath);
 
+    auto fragShaderCode_fill = readFile(filledfragmentShaderPath);
+    auto fragShaderCode_line = readFile(linefragmentShaderPath);
 
 
     VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
-    VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
+    VkShaderModule fragShaderModule_fill = createShaderModule(fragShaderCode_fill);
+    VkShaderModule fragShaderModule_line = createShaderModule(fragShaderCode_line);
 
 
     VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
@@ -1373,13 +1763,22 @@ void VulkanBackend::createGraphicsPipeline() {
     vertShaderStageInfo.module = vertShaderModule;
     vertShaderStageInfo.pName = "main";
 
-    VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
-    fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-    fragShaderStageInfo.module = fragShaderModule;
-    fragShaderStageInfo.pName = "main";
+    VkPipelineShaderStageCreateInfo fragShaderStageInfo_fill{};
+    fragShaderStageInfo_fill.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    fragShaderStageInfo_fill.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    fragShaderStageInfo_fill.module = fragShaderModule_fill;
+    fragShaderStageInfo_fill.pName = "main";
 
-    VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
+
+    VkPipelineShaderStageCreateInfo fragShaderStageInfo_line{};
+    fragShaderStageInfo_line.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    fragShaderStageInfo_line.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    fragShaderStageInfo_line.module = fragShaderModule_line;
+    fragShaderStageInfo_line.pName = "main";
+
+    VkPipelineShaderStageCreateInfo shaderStages_fill[] = { vertShaderStageInfo, fragShaderStageInfo_fill };
+
+    VkPipelineShaderStageCreateInfo shaderStages_line[] = { vertShaderStageInfo, fragShaderStageInfo_line };
 
 
     std::vector<VkDynamicState> dynamicStates = {
@@ -1437,25 +1836,6 @@ void VulkanBackend::createGraphicsPipeline() {
     viewportState.pScissors = &scissor;
 
 
-    //rasterizer
-
-
-    VkPipelineRasterizationStateCreateInfo rasterizer{};
-    rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-    rasterizer.depthClampEnable = VK_FALSE;
-    rasterizer.rasterizerDiscardEnable = VK_FALSE;
-    //VK_POLYGON_MODE_FILL: fill the area of the polygon with fragments
-    //VK_POLYGON_MODE_LINE : polygon edges are drawn as lines 
-    //VK_POLYGON_MODE_POINT : polygon vertices are drawn as points
-    rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-    rasterizer.lineWidth = 1.0f;
-    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-    rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-    rasterizer.depthBiasEnable = VK_FALSE;
-    rasterizer.depthBiasConstantFactor = 0.0f; // Optional
-    rasterizer.depthBiasClamp = 0.0f; // Optional
-    rasterizer.depthBiasSlopeFactor = 0.0f; // Optional
-
 
     //multisampling currently disabled
     VkPipelineMultisampleStateCreateInfo multisampling{};
@@ -1500,7 +1880,7 @@ void VulkanBackend::createGraphicsPipeline() {
     //If you want to use the second method of blending (bitwise combination), then you should set logicOpEnable to VK_TRUE
 
 
-    
+
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -1513,26 +1893,39 @@ void VulkanBackend::createGraphicsPipeline() {
     }
 
 
-    VkGraphicsPipelineCreateInfo pipelineInfo{};
-    pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    pipelineInfo.stageCount = 2;
-    pipelineInfo.pStages = shaderStages;
-    pipelineInfo.pVertexInputState = &vertexInputInfo;
-    pipelineInfo.pInputAssemblyState = &inputAssembly;
-    pipelineInfo.pViewportState = &viewportState;
-    pipelineInfo.pRasterizationState = &rasterizer;
-    pipelineInfo.pMultisampleState = &multisampling;
-    pipelineInfo.pDepthStencilState = nullptr; // Optional
-    pipelineInfo.pColorBlendState = &colorBlending;
-    pipelineInfo.pDynamicState = &dynamicState;
-    pipelineInfo.layout = pipelineLayout;
-    pipelineInfo.renderPass = renderPass;
-    pipelineInfo.subpass = 0;
-    pipelineInfo.basePipelineHandle = VK_NULL_HANDLE; // Optional
-    pipelineInfo.basePipelineIndex = -1; // Optional
+
+    //rasterizer
+
+    VkPipelineDepthStencilStateCreateInfo depthinfo_filled = vkinit::depth_stencil_create_info(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS);
+
+    VkPipelineDepthStencilStateCreateInfo depthinfo_line = vkinit::depth_stencil_create_info(VK_TRUE, VK_FALSE, VK_COMPARE_OP_LESS_OR_EQUAL);
 
 
-    if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS) {
+    
+	//filled rasterizer and graphics pipeline
+    VkPipelineRasterizationStateCreateInfo rasterizer_filled = vkinit::rasterization_state_filled_create_info();
+
+
+    VkGraphicsPipelineCreateInfo pipelineInfo_filled{};
+    pipelineInfo_filled.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipelineInfo_filled.stageCount = 2;
+    pipelineInfo_filled.pStages = shaderStages_fill;
+    pipelineInfo_filled.pVertexInputState = &vertexInputInfo;
+    pipelineInfo_filled.pInputAssemblyState = &inputAssembly;
+    pipelineInfo_filled.pViewportState = &viewportState;
+    pipelineInfo_filled.pRasterizationState = &rasterizer_filled;
+    pipelineInfo_filled.pMultisampleState = &multisampling;
+    pipelineInfo_filled.pDepthStencilState = &depthinfo_filled; // Optional
+    pipelineInfo_filled.pColorBlendState = &colorBlending;
+    pipelineInfo_filled.pDynamicState = &dynamicState;
+    pipelineInfo_filled.layout = pipelineLayout;
+    pipelineInfo_filled.renderPass = renderPass;
+    pipelineInfo_filled.subpass = 0;
+    pipelineInfo_filled.basePipelineHandle = VK_NULL_HANDLE; // Optional
+    pipelineInfo_filled.basePipelineIndex = -1; // Optional
+
+
+    if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo_filled, nullptr, &graphicsPipeline_Filled) != VK_SUCCESS) {
         throw std::runtime_error("failed to create graphics pipeline!");
     }
 
@@ -1542,10 +1935,45 @@ void VulkanBackend::createGraphicsPipeline() {
 
 
 
-    vkDestroyShaderModule(device, fragShaderModule, nullptr);
+	//line rasterizer and graphics pipeline
+    VkPipelineRasterizationStateCreateInfo rasterizer_line = vkinit::rasterization_state_lined_create_info(1);
+
+    VkGraphicsPipelineCreateInfo pipelineInfo{};
+    pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipelineInfo.stageCount = 2;
+    pipelineInfo.pStages = shaderStages_line;
+    pipelineInfo.pVertexInputState = &vertexInputInfo;
+    pipelineInfo.pInputAssemblyState = &inputAssembly;
+    pipelineInfo.pViewportState = &viewportState;
+    pipelineInfo.pRasterizationState = &rasterizer_line;
+    pipelineInfo.pMultisampleState = &multisampling;
+    pipelineInfo.pDepthStencilState = &depthinfo_line; // Optional
+    pipelineInfo.pColorBlendState = &colorBlending;
+    pipelineInfo.pDynamicState = &dynamicState;
+    pipelineInfo.layout = pipelineLayout;
+    pipelineInfo.renderPass = renderPass;
+    pipelineInfo.subpass = 0;
+    pipelineInfo.basePipelineHandle = VK_NULL_HANDLE; // Optional
+    pipelineInfo.basePipelineIndex = -1; // Optional
+
+
+    if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline_Line) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create graphics pipeline!");
+    }
+
+
+
+
+    //cleanup
+    vkDestroyShaderModule(device, fragShaderModule_fill, nullptr);
+    vkDestroyShaderModule(device, fragShaderModule_line, nullptr);
+
+
     vkDestroyShaderModule(device, vertShaderModule, nullptr);
 
 }
+
+
 
 VkShaderModule VulkanBackend::createShaderModule(const std::vector<char>& code) {
 

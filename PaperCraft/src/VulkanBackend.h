@@ -105,8 +105,8 @@ private:
 	//const char* fragmentShaderPath = "C:/Users/razer/source/repos/PaperCraft/PaperCraft/src/shaders/frag.spv";
 
 	const char* vertexShaderPath = SHADER_DIR "/vert.spv";
-	const char* fragmentShaderPath = SHADER_DIR "/frag.spv";
-
+	const char* filledfragmentShaderPath = SHADER_DIR "/frag_fill.spv";
+	const char* linefragmentShaderPath = SHADER_DIR "/frag_line.spv";
 
 	const int MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -163,7 +163,7 @@ private:
 	};
 
 
-
+	bool VulkanBackend::rayHitsEdge(glm::vec3 rayOrigin,glm::vec3 rayDir,glm::vec3 a,glm::vec3 b,float threshold, float& outDist);
 	
 
 
@@ -198,6 +198,10 @@ private:
 	void createImageViews();
 
 	void createGraphicsPipeline();
+
+	void createFilledGraohicsPipeline(VkPipelineShaderStageCreateInfo* shaderStages, VkPipelineVertexInputStateCreateInfo vertexInputInfo, VkPipelineInputAssemblyStateCreateInfo inputAssembly, VkPipelineViewportStateCreateInfo viewportState, VkPipelineDynamicStateCreateInfo dynamicState);
+
+	void createLinedGraohicsPipeline(VkPipelineShaderStageCreateInfo* shaderStages, VkPipelineVertexInputStateCreateInfo vertexInputInfo, VkPipelineInputAssemblyStateCreateInfo inputAssembly, VkPipelineViewportStateCreateInfo viewportState, VkPipelineDynamicStateCreateInfo dynamicState);
 
 	void createRenderPass();
 
@@ -268,8 +272,13 @@ private:
 
 	
 	VkDescriptorSetLayout descriptorSetLayout;
+
+
 	VkPipelineLayout pipelineLayout;
-	VkPipeline graphicsPipeline;
+	
+	VkPipeline graphicsPipeline_Filled;
+	VkPipeline graphicsPipeline_Line;
+
 
 	std::vector<VkFramebuffer> swapChainFramebuffers;
 
@@ -293,6 +302,7 @@ private:
 	std::vector<VkDeviceMemory> uniformBuffersMemory;
 	std::vector<void*> uniformBuffersMapped;
 
+	UniformBufferObject uboCPU;
 
 	
 
@@ -354,17 +364,40 @@ private:
 
 	
 	struct Mesh {
-		VkBuffer vertexBuffer{};
-		VkDeviceMemory vertexMemory{};
+		VkBuffer unjoinedvertexBuffer{};
+		VkDeviceMemory unjoinedvertexMemory{};
 
-		VkBuffer indexBuffer{};
-		VkDeviceMemory indexMemory{};
+		VkBuffer joinedvertexBuffer{};
+		VkDeviceMemory joinedvertexMemory{};
+
+		VkBuffer unjoinedindexBuffer{};
+		VkDeviceMemory unjoinedindexMemory{};
+
+		VkBuffer joinedindexBuffer{};
+		VkDeviceMemory joinedindexMemory{};
+
+		VkBuffer indexSelectorBuffer{};
+		VkDeviceMemory indexSelectorMemory{};
+
 
 		uint32_t indexCount = 0;
+
+		//cpu version
+		std::vector<MeshVertex> joinedVerticesCPU;
+		std::vector<uint32_t> joinedIndicesCPU;
+
+		std::vector<MeshVertex> unjoinedVerticesCPU;
+		std::vector<uint32_t> unjoinedIndicesCPU;
 	};
 
-	void createVertexBuffer(Mesh& result, aiMesh* mesh);
-	void createIndexBuffer(Mesh& result, aiMesh* mesh);
+
+	
+
+
+	void createVertexBuffer(Mesh& result, aiMesh* unjoinedmesh, aiMesh* joinedmesh);
+	void createIndexBuffer(Mesh& result, aiMesh* unjoinedmesh, aiMesh* joinedmesh);
+
+	void VulkanBackend::updateSelectorDescriptors(VkDeviceSize selectorSize);
 
 	struct Edge {
 		glm::vec3 v1;
@@ -395,7 +428,7 @@ private:
 
 
 
-	int pickEdge(double mouseX, double mouseY, int screenWidth, int screenHeight, glm::mat4 viewProj);
+	int pickEdge(double mouseX, double mouseY);
 
 	float gScale = 1.0f;
 	float gYaw = 0.0f;   // rotation around Y axis

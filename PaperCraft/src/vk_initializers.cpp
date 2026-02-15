@@ -1,6 +1,100 @@
 ﻿#include <vk_initializers.h>
 
 
+//my version that works (for my thign)
+VkPipelineRasterizationStateCreateInfo vkinit::rasterization_state_filled_create_info() {
+
+	VkPipelineRasterizationStateCreateInfo rasterizer{};
+	rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	rasterizer.depthClampEnable = VK_FALSE;
+	rasterizer.rasterizerDiscardEnable = VK_FALSE;
+	//VK_POLYGON_MODE_FILL: fill the area of the polygon with fragments
+	//VK_POLYGON_MODE_LINE : polygon edges are drawn as lines 
+	//VK_POLYGON_MODE_POINT : polygon vertices are drawn as points
+	rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+	rasterizer.lineWidth = 1.0f;
+	rasterizer.cullMode = VK_CULL_MODE_NONE;
+	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+	rasterizer.depthBiasEnable = VK_FALSE;
+	rasterizer.depthBiasConstantFactor = 0.0f; // Optional
+	rasterizer.depthBiasClamp = 0.0f; // Optional
+	rasterizer.depthBiasSlopeFactor = 0.0f; // Optional
+
+	return rasterizer;
+}
+
+VkPipelineRasterizationStateCreateInfo vkinit::rasterization_state_lined_create_info(uint32_t linewidth) {
+
+	VkPipelineRasterizationStateCreateInfo rasterizer{};
+	rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	rasterizer.depthClampEnable = VK_FALSE;
+	rasterizer.rasterizerDiscardEnable = VK_FALSE;
+	//VK_POLYGON_MODE_FILL: fill the area of the polygon with fragments
+	//VK_POLYGON_MODE_LINE : polygon edges are drawn as lines 
+	//VK_POLYGON_MODE_POINT : polygon vertices are drawn as points
+	rasterizer.polygonMode = VK_POLYGON_MODE_LINE;
+	rasterizer.lineWidth = linewidth;
+	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+	rasterizer.depthBiasEnable = VK_FALSE;
+	rasterizer.depthBiasConstantFactor = 0.0f; // Optional
+	rasterizer.depthBiasClamp = 0.0f; // Optional
+	rasterizer.depthBiasSlopeFactor = 0.0f; // Optional
+
+	return rasterizer;
+}
+
+VkPipelineRasterizationStateCreateInfo vkinit::rasterization_state_point_create_info() {
+
+	VkPipelineRasterizationStateCreateInfo rasterizer{};
+	rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	rasterizer.depthClampEnable = VK_FALSE;
+	rasterizer.rasterizerDiscardEnable = VK_FALSE;
+	//VK_POLYGON_MODE_FILL: fill the area of the polygon with fragments
+	//VK_POLYGON_MODE_LINE : polygon edges are drawn as lines 
+	//VK_POLYGON_MODE_POINT : polygon vertices are drawn as points
+	rasterizer.polygonMode = VK_POLYGON_MODE_POINT;
+	rasterizer.lineWidth = 1.0f;
+	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+	rasterizer.depthBiasEnable = VK_FALSE;
+	rasterizer.depthBiasConstantFactor = 0.0f; // Optional
+	rasterizer.depthBiasClamp = 0.0f; // Optional
+	rasterizer.depthBiasSlopeFactor = 0.0f; // Optional
+
+	return rasterizer;
+}
+
+
+
+/*
+inbuilt version that dont
+VkPipelineRasterizationStateCreateInfo vkinit::rasterization_state_create_info(VkPolygonMode polygonMode)
+{
+	VkPipelineRasterizationStateCreateInfo info = {};
+	info.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	info.pNext = nullptr;
+
+	info.depthClampEnable = VK_FALSE;
+	//rasterizer discard allows objects with holes, default to no
+	info.rasterizerDiscardEnable = VK_FALSE;
+
+	info.polygonMode = polygonMode;
+	info.lineWidth = 1.0f;
+	//no backface cull
+	info.cullMode = VK_CULL_MODE_NONE;
+	info.frontFace = VK_FRONT_FACE_CLOCKWISE;
+	//no depth bias
+	info.depthBiasEnable = VK_FALSE;
+	info.depthBiasConstantFactor = 0.0f;
+	info.depthBiasClamp = 0.0f;
+	info.depthBiasSlopeFactor = 0.0f;
+
+	return info;
+}
+*/
+
+
 VkDebugUtilsObjectNameInfoEXT vkinit::debug_name_create_info(VkObjectType type, uint64_t object, const char* name)
 {
 	VkDebugUtilsObjectNameInfoEXT nameInfo{};
@@ -183,29 +277,12 @@ VkPipelineInputAssemblyStateCreateInfo vkinit::input_assembly_create_info(VkPrim
 	info.primitiveRestartEnable = VK_FALSE;
 	return info;
 }
-VkPipelineRasterizationStateCreateInfo vkinit::rasterization_state_create_info(VkPolygonMode polygonMode)
-{
-	VkPipelineRasterizationStateCreateInfo info = {};
-	info.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-	info.pNext = nullptr;
 
-	info.depthClampEnable = VK_FALSE;
-	//rasterizer discard allows objects with holes, default to no
-	info.rasterizerDiscardEnable = VK_FALSE;
 
-	info.polygonMode = polygonMode;
-	info.lineWidth = 1.0f;
-	//no backface cull
-	info.cullMode = VK_CULL_MODE_NONE;
-	info.frontFace = VK_FRONT_FACE_CLOCKWISE;
-	//no depth bias
-	info.depthBiasEnable = VK_FALSE;
-	info.depthBiasConstantFactor = 0.0f;
-	info.depthBiasClamp = 0.0f;
-	info.depthBiasSlopeFactor = 0.0f;
 
-	return info;
-}
+
+
+
 VkPipelineMultisampleStateCreateInfo vkinit::multisampling_state_create_info()
 {
 	VkPipelineMultisampleStateCreateInfo info = {};
