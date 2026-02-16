@@ -35,6 +35,7 @@
 #include <imgui_impl_vulkan.h>
 #include "tinyfiledialogs.h"
 
+#include "inputhandler.h"
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
@@ -44,8 +45,12 @@
 
 class VulkanBackend {
 public:
+
+	VulkanBackend() : input(this) {}
+
     void runVulkanBackend();
 
+	InputHandler input;
 
 	const uint32_t WIDTH = 800;
 	const uint32_t HEIGHT = 600;
@@ -96,8 +101,88 @@ public:
 
 	void endSingleTimeCommands(VkCommandBuffer commandBuffer);
 
+	void VulkanBackend::initProject();
 
 
+	const float edgePickThreshold = 1.1f; // Adjust as needed for sensitivity
+
+	// Camera and interaction variables
+
+	bool modelLoaded = false;
+
+
+
+	//added normals and it broke display, attrs was size 1 instead of 2 and the attrs[1] was added, also normal thingy
+	struct MeshVertex {
+		glm::vec3 pos;
+		glm::vec3 normal;
+		glm::vec3 bary;
+
+
+		static VkVertexInputBindingDescription getBindingDescription() {
+			VkVertexInputBindingDescription binding{};
+			binding.binding = 0;
+			binding.stride = sizeof(MeshVertex);
+			binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+			return binding;
+		}
+
+		static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions() {
+			std::array<VkVertexInputAttributeDescription, 3> attrs{};
+
+			// position
+			attrs[0].binding = 0;
+			attrs[0].location = 0;
+			attrs[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+			attrs[0].offset = offsetof(MeshVertex, pos);
+
+			// normal
+			attrs[1].binding = 0;
+			attrs[1].location = 1;
+			attrs[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+			attrs[1].offset = offsetof(MeshVertex, normal);
+
+			// barycentric coords
+			attrs[2].binding = 0;
+			attrs[2].location = 2;
+			attrs[2].format = VK_FORMAT_R32G32B32_SFLOAT;
+			attrs[2].offset = offsetof(MeshVertex, bary);
+
+			return attrs;
+		}
+	};
+
+	struct Mesh {
+		VkBuffer unjoinedvertexBuffer{};
+		VkDeviceMemory unjoinedvertexMemory{};
+
+		//VkBuffer joinedvertexBuffer{};
+		//VkDeviceMemory joinedvertexMemory{};
+
+		VkBuffer unjoinedindexBuffer{};
+		VkDeviceMemory unjoinedindexMemory{};
+
+		//VkBuffer joinedindexBuffer{};
+		//VkDeviceMemory joinedindexMemory{};
+
+		VkBuffer indexSelectorBuffer{};
+		VkDeviceMemory indexSelectorMemory{};
+
+
+		uint32_t indexCount = 0;
+
+		//cpu version
+		//std::vector<MeshVertex> joinedVerticesCPU;
+		//std::vector<uint32_t> joinedIndicesCPU;
+
+		std::vector<MeshVertex> unjoinedVerticesCPU;
+		std::vector<uint32_t> unjoinedIndicesCPU;
+	};
+	
+
+	Mesh gMesh;
+
+	std::array<uint32_t, 2> pickEdge(double mouseX, double mouseY);
 
 private:
 
@@ -331,120 +416,47 @@ private:
 	VkDescriptorPool imguiPool;
 
 
-	//added normals and it broke display, attrs was size 1 instead of 2 and the attrs[1] was added, also normal thingy
-	struct MeshVertex {
-		glm::vec3 pos;
-		glm::vec3 normal;
 
-		static VkVertexInputBindingDescription getBindingDescription() {
-			VkVertexInputBindingDescription binding{};
-			binding.binding = 0;
-			binding.stride = sizeof(MeshVertex);
-			binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-			return binding;
-		}
-
-		static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions() {
-			std::array<VkVertexInputAttributeDescription, 2> attrs{};
-
-			attrs[0].binding = 0;
-			attrs[0].location = 0;
-			attrs[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-			attrs[0].offset = offsetof(MeshVertex, pos);
-
-			attrs[1].binding = 0; 
-			attrs[1].location = 1; 
-			attrs[1].format = VK_FORMAT_R32G32B32_SFLOAT; 
-			attrs[1].offset = offsetof(MeshVertex, normal);
-
-			return attrs;
-		}
-	};
 	
 
 	
-	struct Mesh {
-		VkBuffer unjoinedvertexBuffer{};
-		VkDeviceMemory unjoinedvertexMemory{};
 
-		VkBuffer joinedvertexBuffer{};
-		VkDeviceMemory joinedvertexMemory{};
-
-		VkBuffer unjoinedindexBuffer{};
-		VkDeviceMemory unjoinedindexMemory{};
-
-		VkBuffer joinedindexBuffer{};
-		VkDeviceMemory joinedindexMemory{};
-
-		VkBuffer indexSelectorBuffer{};
-		VkDeviceMemory indexSelectorMemory{};
-
-
-		uint32_t indexCount = 0;
-
-		//cpu version
-		std::vector<MeshVertex> joinedVerticesCPU;
-		std::vector<uint32_t> joinedIndicesCPU;
-
-		std::vector<MeshVertex> unjoinedVerticesCPU;
-		std::vector<uint32_t> unjoinedIndicesCPU;
-	};
 
 
 	
 
 
-	void createVertexBuffer(Mesh& result, aiMesh* unjoinedmesh, aiMesh* joinedmesh);
-	void createIndexBuffer(Mesh& result, aiMesh* unjoinedmesh, aiMesh* joinedmesh);
+	void createVertexBuffer(Mesh& result, aiMesh* unjoinedmesh);
+	void createIndexBuffer(Mesh& result, aiMesh* unjoinedmesh);
 
 	void VulkanBackend::updateSelectorDescriptors(VkDeviceSize selectorSize);
 
-	struct Edge {
-		glm::vec3 v1;
-		glm::vec3 v2;
-		bool cut = false;
-	};
 
-	std::vector<Edge> gEdgeList;
+	
 
-	Mesh gMesh;
-
-	bool modelLoaded = false;
+	
 
 
 	//void buildEdges(const aiMesh* mesh);
 
 	Mesh loadMesh(const char* path);
 
-	static void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
+	//static void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 
-	static void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
+	//static void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
 
-	static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos);
+	//static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos);
 
-	void onScroll(double xoffset, double yoffset);
-	void onMouseButton(int button, int action, int mods);
-	void onCursorMove(double xpos, double ypos);
+	//void onScroll(double xoffset, double yoffset);
+	//void onMouseButton(int button, int action, int mods);
+	//void onCursorMove(double xpos, double ypos);
 
 
 
-	int pickEdge(double mouseX, double mouseY);
 
-	float gScale = 1.0f;
-	float gYaw = 0.0f;   // rotation around Y axis
-	float gPitch = 0.0f; // rotation around X axis
-	bool gDragging = false;
-	double gLastX, gLastY;
 
-	float gPanX = 0.0f;
-	float gPanY = 0.0f;
-	bool gPanning = false;
-	double gLastPanX, gLastPanY;
 
-	const double CLICK_THRESHOLD = 5.0;
 
-	double xstart;
-	double ystart;
 
 };
 

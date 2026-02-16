@@ -41,6 +41,7 @@ set(SOURCES
     ${CMAKE_SOURCE_DIR}/PaperCraft/src/VulkanBackend.cpp
     ${CMAKE_SOURCE_DIR}/PaperCraft/src/ModelLoader.cpp
     ${CMAKE_SOURCE_DIR}/PaperCraft/src/vk_initializers.cpp
+    ${CMAKE_SOURCE_DIR}/PaperCraft/src/inputhandler.cpp
 
 )
 
@@ -51,6 +52,8 @@ set(HEADERS
     ${CMAKE_SOURCE_DIR}/PaperCraft/src/Edge.h
     ${CMAKE_SOURCE_DIR}/PaperCraft/src/vk_initializers.h
     ${CMAKE_SOURCE_DIR}/PaperCraft/src/vk_types.h
+    ${CMAKE_SOURCE_DIR}/PaperCraft/src/inputhandler.h
+
 
 )
 
@@ -67,7 +70,6 @@ add_library(imgui
 )
 
 
-
 #target_include_directories(PaperCraftApp PRIVATE external/imgui external/imgui/backends)
 
 
@@ -77,7 +79,7 @@ add_library(imgui
 
 
 
-add_executable(PaperCraftApp ${SOURCES} ${HEADERS})
+add_executable(PaperCraftApp ${SOURCES} ${HEADERS} "PaperCraft/src/inputhandler.h" "PaperCraft/src/inputhandler.cpp")
 
 #add_executable(PaperCraftApp ${SOURCES} ${HEADERS} "PaperCraft/src/vk_initializers.cpp" "PaperCraft/src/vk_initializers.h")
 

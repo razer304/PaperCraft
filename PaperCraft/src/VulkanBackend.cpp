@@ -1,11 +1,13 @@
 #include "VulkanBackend.h"
 #include "vk_initializers.h"
-
+#include "inputhandler.h"
 
 void VulkanBackend::runVulkanBackend() {
     if (enableValidationLayers) {
         std::cout << "- runVulkanBackend " << std::endl;
     }
+    
+    initProject();
 	initWindow();
     initVulkan();
     mainLoop();
@@ -13,6 +15,14 @@ void VulkanBackend::runVulkanBackend() {
 }
 //base Vulkan functions
 
+
+void VulkanBackend::initProject() {
+    if (enableValidationLayers) {
+        std::cout << "Init Project " << std::endl;
+    }
+    input.installCallbacks(window);
+
+}
 
 void VulkanBackend::initWindow() {
     if (enableValidationLayers) {
@@ -24,17 +34,14 @@ void VulkanBackend::initWindow() {
 
 
 
-
-
-
     window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
 
     glfwSetWindowUserPointer(window, this);
 
 
-    glfwSetScrollCallback(window, scroll_callback); 
-    glfwSetMouseButtonCallback(window, mouse_button_callback); 
-    glfwSetCursorPosCallback(window, cursor_position_callback); 
+    glfwSetScrollCallback(window, input.scroll_callback);
+    glfwSetMouseButtonCallback(window, input.mouse_button_callback);
+    glfwSetCursorPosCallback(window, input.cursor_position_callback);
 
 
     glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
@@ -136,15 +143,15 @@ void VulkanBackend::cleanupVulkan() {
     vkDestroyBuffer(device, gMesh.unjoinedindexBuffer, nullptr);
     vkFreeMemory(device, gMesh.unjoinedindexMemory, nullptr);
 
-    vkDestroyBuffer(device, gMesh.joinedindexBuffer, nullptr);
-    vkFreeMemory(device, gMesh.joinedindexMemory, nullptr);
+    //vkDestroyBuffer(device, gMesh.joinedindexBuffer, nullptr);
+    //vkFreeMemory(device, gMesh.joinedindexMemory, nullptr);
 
     vkDestroyBuffer(device, gMesh.indexSelectorBuffer, nullptr);
     vkFreeMemory(device, gMesh.indexSelectorMemory, nullptr);
 
 
-    vkDestroyBuffer(device, gMesh.joinedvertexBuffer, nullptr);
-    vkFreeMemory(device, gMesh.joinedvertexMemory, nullptr);
+    //vkDestroyBuffer(device, gMesh.joinedvertexBuffer, nullptr);
+    //vkFreeMemory(device, gMesh.joinedvertexMemory, nullptr);
 
 
     vkDestroyBuffer(device, gMesh.unjoinedvertexBuffer, nullptr);
@@ -155,7 +162,7 @@ void VulkanBackend::cleanupVulkan() {
     
 
     vkDestroyPipeline(device, graphicsPipeline_Filled, nullptr);
-    vkDestroyPipeline(device, graphicsPipeline_Line, nullptr);
+    //vkDestroyPipeline(device, graphicsPipeline_Line, nullptr);
 
     vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 
@@ -260,131 +267,29 @@ void VulkanBackend::drawFrame() {
 
 
 
-void VulkanBackend::scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
-    auto* backend = reinterpret_cast<VulkanBackend*>(glfwGetWindowUserPointer(window));
-    backend->onScroll(xoffset, yoffset);
-}
-
-void VulkanBackend::mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
-    auto* backend = reinterpret_cast<VulkanBackend*>(glfwGetWindowUserPointer(window));
-    backend->onMouseButton(button, action, mods);
-}
-
-void VulkanBackend::cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
-    auto* backend = reinterpret_cast<VulkanBackend*>(glfwGetWindowUserPointer(window));
-    backend->onCursorMove(xpos, ypos);
-}
 
 
-
-void VulkanBackend::onScroll(double xoffset, double yoffset) {
-    gScale += yoffset * 0.1f;
-    if (gScale < 0.1f) gScale = 0.1f;
-}
-
-void VulkanBackend::onMouseButton(int button, int action, int mods) {
-    if (button == GLFW_MOUSE_BUTTON_LEFT) {
-        if (action == GLFW_PRESS) {
-            gDragging = true;
-            glfwGetCursorPos(window, &gLastX, &gLastY);
-            xstart = gLastX;
-            ystart = gLastY;
-        }
-        else if (action == GLFW_RELEASE) {
-            gDragging = false;
-
-            double releaseX, releaseY;
-            glfwGetCursorPos(window, &releaseX, &releaseY);
-
-            double dx = releaseX - xstart;
-            double dy = releaseY - ystart;
-            double dist = sqrt(dx * dx + dy * dy);
-
-            if (dist < CLICK_THRESHOLD && modelLoaded) {
-                
-                int edgeindex = pickEdge(releaseX, releaseY);
-
-                if (edgeindex >= 0) {
-
-                    uint32_t i0 = gMesh.unjoinedIndicesCPU[edgeindex];
-                    uint32_t i1 = gMesh.unjoinedIndicesCPU[(edgeindex + 1) % 3 == 0 ? edgeindex - 2 : edgeindex + 1];
-
-
-                    uint32_t* data;
-                    vkMapMemory(device, gMesh.indexSelectorMemory, 0, VK_WHOLE_SIZE, 0, (void**)&data);
-
-
-                    data[i0] = data[i0] ? 0 : 1;
-                    data[i1] = data[i1] ? 0 : 1;
-
-                    std::cout << "edge index hit point a!  " << i0 << std::endl;
-                    std::cout << "edge index hit point b!  " << i1 << std::endl;
-
-                    vkUnmapMemory(device, gMesh.indexSelectorMemory);
-                }
-
-
-
-
-
-            }
-        }
-    }
-
-    if (button == GLFW_MOUSE_BUTTON_MIDDLE) {
-        if (action == GLFW_PRESS) {
-            gPanning = true;
-            glfwGetCursorPos(window, &gLastPanX, &gLastPanY);
-        }
-        else if (action == GLFW_RELEASE) {
-            gPanning = false;
-        }
-    }
-}
-
-void VulkanBackend::onCursorMove(double xpos, double ypos) {
-    if (gDragging) {
-        double dx = xpos - gLastX;
-        double dy = ypos - gLastY;
-        gLastX = xpos;
-        gLastY = ypos;
-
-        gYaw += dx * 0.5f;
-        gPitch += dy * 0.5f;
-    }
-
-    if (gPanning) {
-        double dx = xpos - gLastPanX;
-        double dy = ypos - gLastPanY;
-        gLastPanX = xpos;
-        gLastPanY = ypos;
-
-        gPanX += dx * 0.01f;
-        gPanY -= dy * 0.01f;
-    }
-}
-
-
-int VulkanBackend::pickEdge(double mouseX, double mouseY) {
+std::array<uint32_t, 2> VulkanBackend::pickEdge(double mouseX, double mouseY) {
     // Convert mouse coords to NDC
     float ndcX = (2.0f * mouseX) / swapChainExtent.width - 1.0f;
     float ndcY = 1.0f - (2.0f * mouseY) / swapChainExtent.height;
 
-    // Ray in clip space
-    glm::vec4 rayClip(ndcX, ndcY, -1.0f, 1.0f);
+    glm::mat4 invVP = glm::inverse(uboCPU.proj * uboCPU.view);
 
-    // Transform to world space
-    glm::vec4 rayEye = glm::inverse(uboCPU.proj) * rayClip;
-    rayEye = glm::vec4(rayEye.x, rayEye.y, -1.0f, 0.0f);
+    // near point in world space
+    glm::vec4 p0 = invVP * glm::vec4(ndcX, ndcY, 0.0f, 1.0f);
+    p0 /= p0.w;
+
+    // far point in world space
+    glm::vec4 p1 = invVP * glm::vec4(ndcX, ndcY, 1.0f, 1.0f);
+    p1 /= p1.w;
+
+    glm::vec3 rayOrigin = glm::vec3(p0);
+    glm::vec3 rayDir = glm::normalize(glm::vec3(p1 - p0));
 
 
-    glm::vec3 rayDir = glm::normalize(glm::vec3(glm::inverse(uboCPU.view) * rayEye));
 
-    glm::vec3 rayOrigin = glm::vec3(glm::inverse(uboCPU.view)[3]);
-
-
-
-    int closestEdge = -1;
+    std::array<uint32_t, 2> closestEdge = { -1, -1 };
     float closestDist = 1e9f;
 
     for (uint32_t i = 0; i < gMesh.indexCount; i += 3) {
@@ -392,34 +297,37 @@ int VulkanBackend::pickEdge(double mouseX, double mouseY) {
         uint32_t i1 = gMesh.unjoinedIndicesCPU[i + 1];
         uint32_t i2 = gMesh.unjoinedIndicesCPU[i + 2];
 
-        glm::vec3 a0 = gMesh.unjoinedVerticesCPU[i0].pos;
-        glm::vec3 a1 = gMesh.unjoinedVerticesCPU[i1].pos;
-        glm::vec3 a2 = gMesh.unjoinedVerticesCPU[i2].pos;
+        glm::vec3 v0 = gMesh.unjoinedVerticesCPU[i0].pos;
+        glm::vec3 v1 = gMesh.unjoinedVerticesCPU[i1].pos;
+        glm::vec3 v2 = gMesh.unjoinedVerticesCPU[i2].pos;
+
+        // transform to world space using the same model matrix as the shader
+        glm::vec3 w0 = glm::vec3(uboCPU.model * glm::vec4(v0, 1.0f));
+        glm::vec3 w1 = glm::vec3(uboCPU.model * glm::vec4(v1, 1.0f));
+        glm::vec3 w2 = glm::vec3(uboCPU.model * glm::vec4(v2, 1.0f));
 
         float dist;
 
-        // test edge 0–1
-        if (rayHitsEdge(rayOrigin, rayDir, a0, a1, 5.0f, dist) && dist < closestDist) {
+        if (rayHitsEdge(rayOrigin, rayDir, w0, w1, edgePickThreshold, dist) && dist < closestDist) {
             closestDist = dist;
-            closestEdge = i + 0;   // index of this edge
+            closestEdge = { i0, i1 };
         }
 
-        // test edge 1–2
-        if (rayHitsEdge(rayOrigin, rayDir, a1, a2, 5.0f, dist) && dist < closestDist) {
+        if (rayHitsEdge(rayOrigin, rayDir, w1, w2, edgePickThreshold, dist) && dist < closestDist) {
             closestDist = dist;
-            closestEdge = i + 1;
+            closestEdge = { i1, i2 };
         }
 
-        // test edge 2–0
-        if (rayHitsEdge(rayOrigin, rayDir, a2, a0, 5.0f, dist) && dist < closestDist) {
+        if (rayHitsEdge(rayOrigin, rayDir, w2, w0, edgePickThreshold, dist) && dist < closestDist) {
             closestDist = dist;
-            closestEdge = i + 2;
+            closestEdge = { i2, i0 };
         }
     }
 
 
 
     return closestEdge;
+    
 
 }
 
@@ -662,15 +570,6 @@ VulkanBackend::Mesh VulkanBackend::loadMesh(const char* path) {
         aiProcess_GenNormals
     );
     
-    const aiScene* joinedscene = importer.ReadFile(
-        path,
-        aiProcess_Triangulate |
-        aiProcess_FixInfacingNormals |
-        aiProcess_SortByPType |
-        aiProcess_GenNormals |
-        aiProcess_JoinIdenticalVertices
-    );
-    
 
     VulkanBackend::Mesh result{}; // make sure this exists before use
 
@@ -683,7 +582,6 @@ VulkanBackend::Mesh VulkanBackend::loadMesh(const char* path) {
 
 
     aiMesh* unjoinedmesh = unjoinedscene->mMeshes[0]; // just take the first mesh
-    aiMesh* joinedmesh = joinedscene->mMeshes[0];
 
     //i wanna have one vertex buffer with all seperate vertexs and also one where they are the same vertexs
     //i might be able to do this by just changeing index buffer actually
@@ -696,8 +594,8 @@ VulkanBackend::Mesh VulkanBackend::loadMesh(const char* path) {
     //and to test i can use colours
 
 
-    createVertexBuffer(result, unjoinedmesh, joinedmesh);
-    createIndexBuffer(result, unjoinedmesh, joinedmesh);
+    createVertexBuffer(result, unjoinedmesh);
+    //createIndexBuffer(result, unjoinedmesh, joinedmesh);
 
 
     
@@ -710,93 +608,65 @@ VulkanBackend::Mesh VulkanBackend::loadMesh(const char* path) {
 }
 
 
-void VulkanBackend::createVertexBuffer(Mesh& result, aiMesh* unjoinedmesh, aiMesh* joinedmesh) {
+void VulkanBackend::createVertexBuffer(Mesh& result, aiMesh* unjoinedmesh) {
 
     if (enableValidationLayers) {
         std::cout << "- createVertexBuffer " << std::endl;
     }
 
-
-    // Collect joined vertices (x,y,z as floats)
-    std::vector<MeshVertex> joinedvertices;
-    joinedvertices.reserve(joinedmesh->mNumVertices * 3);
-
-
-    for (unsigned int i = 0; i < joinedmesh->mNumVertices; i++) {
-        MeshVertex v{};
-        v.pos = glm::vec3(
-            joinedmesh->mVertices[i].x,
-            joinedmesh->mVertices[i].y,
-            joinedmesh->mVertices[i].z);
-        v.normal = glm::vec3(
-            joinedmesh->mNormals[i].x,
-            joinedmesh->mNormals[i].y,
-            joinedmesh->mNormals[i].z);
-
-        joinedvertices.push_back(v);
-
-        
-    }
-
-    result.joinedVerticesCPU = joinedvertices;
+    
 
     // Collect vertices (x,y,z as floats)
     std::vector<MeshVertex> unjoinedvertices;
-    unjoinedvertices.reserve(unjoinedmesh->mNumVertices * 3);
+    std::vector<uint32_t> unjoinedindices;
+
+    unjoinedvertices.reserve(unjoinedmesh->mNumFaces * 3);
 
 
-    for (unsigned int i = 0; i < unjoinedmesh->mNumVertices; i++) {
-        MeshVertex v{};
-        v.pos = glm::vec3(
-            unjoinedmesh->mVertices[i].x,
-            unjoinedmesh->mVertices[i].y,
-            unjoinedmesh->mVertices[i].z);
-        v.normal = glm::vec3(
-            unjoinedmesh->mNormals[i].x,
-            unjoinedmesh->mNormals[i].y,
-            unjoinedmesh->mNormals[i].z);
+    for (unsigned int i = 0; i < unjoinedmesh->mNumFaces; i++) {
 
-        unjoinedvertices.push_back(v);
+        aiFace& face = unjoinedmesh->mFaces[i];
 
+        for (unsigned int j = 0; j < face.mNumIndices; j++)
+        {
+            unsigned int idx = face.mIndices[j];
+
+            MeshVertex v{};
+
+            v.pos = glm::vec3(
+                unjoinedmesh->mVertices[idx].x,
+                unjoinedmesh->mVertices[idx].y,
+                unjoinedmesh->mVertices[idx].z);
+            v.normal = glm::vec3(
+                unjoinedmesh->mNormals[idx].x,
+                unjoinedmesh->mNormals[idx].y,
+                unjoinedmesh->mNormals[idx].z);
+
+            // Assign barycentrics based on j (0,1,2) 
+            if (j == 0) 
+                v.bary = glm::vec3(1,0,0); 
+            else if (j == 1) v.bary = glm::vec3(0,1,0); 
+            else v.bary = glm::vec3(0,0,1);
+
+            unjoinedvertices.push_back(v); 
+            unjoinedindices.push_back(unjoinedvertices.size() - 1);
+
+        }
+
+    }
+
+    for (size_t i = 0; i < unjoinedindices.size(); i++)
+    {
+        std::cout << "- unjoined indicies: " << i << ", " << unjoinedindices[i] << std::endl;
 
     }
 
 
     
     result.unjoinedVerticesCPU = unjoinedvertices;
-    
+    result.unjoinedIndicesCPU = unjoinedindices;
 
-	//joined vertex buffer
-    VkDeviceSize joinvertexSize = joinedvertices.size() * sizeof(MeshVertex);
-
-    VkBuffer joinstagingBuffer;
-    VkDeviceMemory joinstagingMemory;
-
-    createBuffer(
-        joinvertexSize,
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        joinstagingBuffer,
-        joinstagingMemory
-    );
-
-    void* joineddata;
-    vkMapMemory(device, joinstagingMemory, 0, joinvertexSize, 0, &joineddata);
-    memcpy(joineddata, joinedvertices.data(), static_cast<size_t>(joinvertexSize));
-    vkUnmapMemory(device, joinstagingMemory);
-
-    createBuffer(
-        joinvertexSize,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        result.joinedvertexBuffer,
-        result.joinedvertexMemory
-    );
-
-    copyBuffer(joinstagingBuffer, result.joinedvertexBuffer, joinvertexSize);
-
-    vkDestroyBuffer(device, joinstagingBuffer, nullptr);
-    vkFreeMemory(device, joinstagingMemory, nullptr);
+    result.indexCount = static_cast<uint32_t>(unjoinedindices.size());
 
 
 	//unjoined vertex buffer
@@ -832,11 +702,83 @@ void VulkanBackend::createVertexBuffer(Mesh& result, aiMesh* unjoinedmesh, aiMes
     vkFreeMemory(device, unjoinstagingMemory, nullptr);
 
 
+	//INDEX BUFFER STUFFS!!!!!
+
+    VkBuffer stagingBuffer;
+    VkDeviceMemory stagingMemory;
+
+    VkDeviceSize indexSize = unjoinedindices.size() * sizeof(uint32_t);
+
+
+
+    //unjoined index buffer creatign
+    createBuffer(
+        indexSize,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        stagingBuffer,
+        stagingMemory
+    );
+
+
+    vkMapMemory(device, stagingMemory, 0, indexSize, 0, &unjoineddata);
+    memcpy(unjoineddata, unjoinedindices.data(), static_cast<size_t>(indexSize));
+    vkUnmapMemory(device, stagingMemory);
+
+    createBuffer(
+        indexSize,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        result.unjoinedindexBuffer,
+        result.unjoinedindexMemory
+    );
+
+    copyBuffer(stagingBuffer, result.unjoinedindexBuffer, indexSize);
+
+
+    vkDestroyBuffer(device, stagingBuffer, nullptr);
+    vkFreeMemory(device, stagingMemory, nullptr);
+
+
+
+    //selector buffer creation
+
+
+    std::vector<uint32_t> selector(unjoinedindices.size(), 0);
+
+
+    VkDeviceSize selectorSize = selector.size() * sizeof(uint32_t);
+
+    createBuffer(
+        selectorSize,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, // or whatever you bind it as
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        result.indexSelectorBuffer,
+        result.indexSelectorMemory
+    );
+
+    // Initialize to zero
+    void* data;
+    vkMapMemory(device, result.indexSelectorMemory, 0, selectorSize, 0, &data);
+    //memset(data, 1, selectorSize);
+    auto* check = static_cast<uint32_t*>(data);
+
+    std::cout << "selector[0] CPU = " << check[0] << std::endl;
+    std::cout << "selector size: " << selectorSize << std::endl;
+
+
+    memcpy(data, selector.data(), selectorSize);
+
+    check = static_cast<uint32_t*>(data);
+
+    std::cout << "selector[0] CPU = " << check[0] << std::endl;
+
+    vkUnmapMemory(device, result.indexSelectorMemory);
 
 
 }
 
-
+/*
 
 void VulkanBackend::createIndexBuffer(Mesh& result, aiMesh* mesh, aiMesh* joinedmesh) {
 
@@ -866,80 +808,20 @@ void VulkanBackend::createIndexBuffer(Mesh& result, aiMesh* mesh, aiMesh* joined
     result.joinedIndicesCPU = joinedindices;
     result.unjoinedIndicesCPU = unjoinedindices;
 
+    for (size_t i = 0; i < unjoinedindices.size(); i++)
+    {
+        std::cout << "- unjoined indicies: " << i << ", " << unjoinedindices[i] << std::endl;
+
+    }
+
+
 
     result.indexCount = static_cast<uint32_t>(joinedindices.size());
 
 
-    //selector buffer creation
-    std::vector<uint32_t> selector(result.indexCount, 1);
 
-
-    VkDeviceSize selectorSize = (result.indexCount + 1) * sizeof(uint32_t);
-
-    createBuffer(
-        selectorSize,
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, // or whatever you bind it as
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        result.indexSelectorBuffer,
-        result.indexSelectorMemory
-    );
-
-    // Initialize to zero
-    void* data;
-    vkMapMemory(device, result.indexSelectorMemory, 0, selectorSize, 0, &data);
-    //memset(data, 1, selectorSize);
-    auto* check = static_cast<uint32_t*>(data);
-
-    std::cout << "selector[0] CPU = " << check[0] << std::endl;
-
-    memcpy(data, selector.data(), selectorSize);
-
-    check = static_cast<uint32_t*>(data); 
-
-    std::cout << "selector[0] CPU = " << check[0] << std::endl;
-
-    vkUnmapMemory(device, result.indexSelectorMemory);
-
-
-    VkBuffer stagingBuffer;
-    VkDeviceMemory stagingMemory;
-
-    VkDeviceSize indexSize = unjoinedindices.size() * sizeof(uint32_t);
-
-
-
-
-
-
-
-	//unjoined index buffer creatign
-    createBuffer(
-        indexSize,
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        stagingBuffer,
-        stagingMemory
-    );
-
-
-    void* unjoineddata;
-    vkMapMemory(device, stagingMemory, 0, indexSize, 0, &unjoineddata);
-    memcpy(unjoineddata, unjoinedindices.data(), static_cast<size_t>(indexSize));
-    vkUnmapMemory(device, stagingMemory);
-
-    createBuffer(
-        indexSize,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        result.unjoinedindexBuffer,
-        result.unjoinedindexMemory
-    );
-
-    copyBuffer(stagingBuffer, result.unjoinedindexBuffer, indexSize);
 
     
-    vkDestroyBuffer(device, stagingBuffer, nullptr);
-    vkFreeMemory(device, stagingMemory, nullptr);
 
 	//joined index buffer
 
@@ -976,7 +858,7 @@ void VulkanBackend::createIndexBuffer(Mesh& result, aiMesh* mesh, aiMesh* joined
     
 }
 
-
+*/
 
 //vulkan stuffs
 
@@ -1119,14 +1001,14 @@ void VulkanBackend::updateUniformBuffer(uint32_t currentImage) {
     glm::mat4 model = glm::mat4(1.0f);
 
     // Apply user-controlled rotation
-    model = glm::rotate(model, glm::radians((float)gPitch), glm::vec3(1, 0, 0));
-    model = glm::rotate(model, glm::radians((float)gYaw), glm::vec3(0, 1, 0));
+    model = glm::rotate(model, glm::radians((float)input.gPitch), glm::vec3(1, 0, 0));
+    model = glm::rotate(model, glm::radians((float)input.gYaw), glm::vec3(0, 1, 0));
 
     // Apply user-controlled zoom (scale)
-    model = glm::scale(model, glm::vec3(gScale));
+    model = glm::scale(model, glm::vec3(input.gScale));
 
     // Apply user-controlled panning
-    model = glm::translate(model, glm::vec3(gPanX, gPanY, 0.0f));
+    model = glm::translate(model, glm::vec3(input.gPanX, input.gPanY, 0.0f));
 
     uboCPU.model = model;
 
@@ -1195,7 +1077,7 @@ void VulkanBackend::createDescriptorSetLayout() {
     selectLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     selectLayoutBinding.descriptorCount = 1;
 
-    selectLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    selectLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 
     selectLayoutBinding.pImmutableSamplers = nullptr; // Optional
 
@@ -1505,7 +1387,7 @@ void VulkanBackend::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t 
         //std::cout << "- prebind2" << std::endl;
 
 
-        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline_Line);
+        //vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline_Line);
 
         //std::cout << "- predraw2" << std::endl;
 
@@ -1747,13 +1629,17 @@ void VulkanBackend::createGraphicsPipeline() {
     auto vertShaderCode = readFile(vertexShaderPath);
 
     auto fragShaderCode_fill = readFile(filledfragmentShaderPath);
-    auto fragShaderCode_line = readFile(linefragmentShaderPath);
+    //auto fragShaderCode_line = readFile(linefragmentShaderPath);
 
 
     VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
     VkShaderModule fragShaderModule_fill = createShaderModule(fragShaderCode_fill);
-    VkShaderModule fragShaderModule_line = createShaderModule(fragShaderCode_line);
+    //VkShaderModule fragShaderModule_line = createShaderModule(fragShaderCode_line);
 
+
+    if (enableValidationLayers) {
+        std::cout << "- createShaderModules fin " << std::endl;
+    }
 
     VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
     vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -1769,16 +1655,20 @@ void VulkanBackend::createGraphicsPipeline() {
     fragShaderStageInfo_fill.module = fragShaderModule_fill;
     fragShaderStageInfo_fill.pName = "main";
 
-
+/*
     VkPipelineShaderStageCreateInfo fragShaderStageInfo_line{};
     fragShaderStageInfo_line.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     fragShaderStageInfo_line.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
     fragShaderStageInfo_line.module = fragShaderModule_line;
-    fragShaderStageInfo_line.pName = "main";
+    fragShaderStageInfo_line.pName = "main";*/
 
     VkPipelineShaderStageCreateInfo shaderStages_fill[] = { vertShaderStageInfo, fragShaderStageInfo_fill };
 
-    VkPipelineShaderStageCreateInfo shaderStages_line[] = { vertShaderStageInfo, fragShaderStageInfo_line };
+    //VkPipelineShaderStageCreateInfo shaderStages_line[] = { vertShaderStageInfo, fragShaderStageInfo_line };
+
+    if (enableValidationLayers) {
+        std::cout << "- post shaderstagesfill " << std::endl;
+    }
 
 
     std::vector<VkDynamicState> dynamicStates = {
@@ -1786,14 +1676,31 @@ void VulkanBackend::createGraphicsPipeline() {
     VK_DYNAMIC_STATE_SCISSOR
     };
 
+    if (enableValidationLayers) {
+        std::cout << "- pre dynamicState " << std::endl;
+    }
+
     VkPipelineDynamicStateCreateInfo dynamicState{};
     dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
     dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
     dynamicState.pDynamicStates = dynamicStates.data();
 
+    if (enableValidationLayers) {
+        std::cout << "- pre bindingDescription " << std::endl;
+    }
 
     auto bindingDescription = MeshVertex::getBindingDescription();
+
+    if (enableValidationLayers) {
+        std::cout << "- post bindingDescription " << std::endl;
+    }
+
     auto attributeDescriptions = MeshVertex::getAttributeDescriptions();
+
+
+    if (enableValidationLayers) {
+        std::cout << "- pre vertexInputInfo " << std::endl;
+    }
 
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -1803,7 +1710,9 @@ void VulkanBackend::createGraphicsPipeline() {
     vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
 
-
+    if (enableValidationLayers) {
+        std::cout << "- post vertexInputInfo " << std::endl;
+    }
 
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
     inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -1824,7 +1733,9 @@ void VulkanBackend::createGraphicsPipeline() {
 
 
 
-
+    if (enableValidationLayers) {
+        std::cout << "- pre viewport state " << std::endl;
+    }
 
 
 
@@ -1887,6 +1798,10 @@ void VulkanBackend::createGraphicsPipeline() {
     pipelineLayoutInfo.setLayoutCount = 1;
     pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
 
+    if (enableValidationLayers) {
+        std::cout << "- pre create pipeline layout " << std::endl;
+    }
+
 
     if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
         throw std::runtime_error("failed to create pipeline layout!");
@@ -1933,43 +1848,48 @@ void VulkanBackend::createGraphicsPipeline() {
 
 
 
-
+/*
 
 	//line rasterizer and graphics pipeline
     VkPipelineRasterizationStateCreateInfo rasterizer_line = vkinit::rasterization_state_lined_create_info(1);
 
-    VkGraphicsPipelineCreateInfo pipelineInfo{};
-    pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    pipelineInfo.stageCount = 2;
-    pipelineInfo.pStages = shaderStages_line;
-    pipelineInfo.pVertexInputState = &vertexInputInfo;
-    pipelineInfo.pInputAssemblyState = &inputAssembly;
-    pipelineInfo.pViewportState = &viewportState;
-    pipelineInfo.pRasterizationState = &rasterizer_line;
-    pipelineInfo.pMultisampleState = &multisampling;
-    pipelineInfo.pDepthStencilState = &depthinfo_line; // Optional
-    pipelineInfo.pColorBlendState = &colorBlending;
-    pipelineInfo.pDynamicState = &dynamicState;
-    pipelineInfo.layout = pipelineLayout;
-    pipelineInfo.renderPass = renderPass;
-    pipelineInfo.subpass = 0;
-    pipelineInfo.basePipelineHandle = VK_NULL_HANDLE; // Optional
-    pipelineInfo.basePipelineIndex = -1; // Optional
+    VkGraphicsPipelineCreateInfo pipelineInfo_line{};
+    pipelineInfo_line.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipelineInfo_line.stageCount = 2;
+    pipelineInfo_line.pStages = shaderStages_line;
+    pipelineInfo_line.pVertexInputState = &vertexInputInfo;
+    pipelineInfo_line.pInputAssemblyState = &inputAssembly;
+    pipelineInfo_line.pViewportState = &viewportState;
+    pipelineInfo_line.pRasterizationState = &rasterizer_line;
+    pipelineInfo_line.pMultisampleState = &multisampling;
+    pipelineInfo_line.pDepthStencilState = &depthinfo_line; // Optional
+    pipelineInfo_line.pColorBlendState = &colorBlending;
+    pipelineInfo_line.pDynamicState = &dynamicState;
+    pipelineInfo_line.layout = pipelineLayout;
+    pipelineInfo_line.renderPass = renderPass;
+    pipelineInfo_line.subpass = 0;
+    pipelineInfo_line.basePipelineHandle = VK_NULL_HANDLE; // Optional
+    pipelineInfo_line.basePipelineIndex = -1; // Optional
 
 
-    if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline_Line) != VK_SUCCESS) {
+    if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo_line, nullptr, &graphicsPipeline_Line) != VK_SUCCESS) {
         throw std::runtime_error("failed to create graphics pipeline!");
     }
 
 
-
+*/
 
     //cleanup
     vkDestroyShaderModule(device, fragShaderModule_fill, nullptr);
-    vkDestroyShaderModule(device, fragShaderModule_line, nullptr);
+    //vkDestroyShaderModule(device, fragShaderModule_line, nullptr);
 
 
     vkDestroyShaderModule(device, vertShaderModule, nullptr);
+
+
+    if (enableValidationLayers) {
+        std::cout << "- createGraphicsPipeline fin " << std::endl;
+    }
 
 }
 
@@ -2485,6 +2405,9 @@ void VulkanBackend:: createLogicalDevice() {
 
 
     VkPhysicalDeviceFeatures deviceFeatures{};
+    deviceFeatures.fillModeNonSolid = VK_TRUE;
+
+
 
     VkDeviceCreateInfo createInfo = vkinit::device_create_info(queueCreateInfos, deviceFeatures, deviceExtensions, validationLayers, enableValidationLayers);
 
