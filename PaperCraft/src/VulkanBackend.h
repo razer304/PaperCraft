@@ -78,9 +78,7 @@ public:
 
 	VkRenderPass renderPass;
 
-	const std::vector<uint16_t> indices = {
-	0, 1, 2, 2, 3, 0
-	};
+
 
 	struct QueueFamilyIndices {
 		std::optional<uint32_t> graphicsFamily;
@@ -104,7 +102,7 @@ public:
 	void VulkanBackend::initProject();
 
 
-	const float edgePickThreshold = 1.1f; // Adjust as needed for sensitivity
+	const float edgePickThreshold = 0.1f; // Adjust as needed for sensitivity
 
 	// Camera and interaction variables
 
@@ -112,12 +110,10 @@ public:
 
 
 
-	//added normals and it broke display, attrs was size 1 instead of 2 and the attrs[1] was added, also normal thingy
 	struct MeshVertex {
 		glm::vec3 pos;
 		glm::vec3 normal;
 		glm::vec3 bary;
-
 
 		static VkVertexInputBindingDescription getBindingDescription() {
 			VkVertexInputBindingDescription binding{};
@@ -148,35 +144,44 @@ public:
 			attrs[2].format = VK_FORMAT_R32G32B32_SFLOAT;
 			attrs[2].offset = offsetof(MeshVertex, bary);
 
+
 			return attrs;
 		}
 	};
 
+
+
+
 	struct Mesh {
-		VkBuffer unjoinedvertexBuffer{};
-		VkDeviceMemory unjoinedvertexMemory{};
+		VkBuffer vertexBuffer{};
+		VkDeviceMemory vertexMemory{};
 
-		//VkBuffer joinedvertexBuffer{};
-		//VkDeviceMemory joinedvertexMemory{};
+		VkBuffer fillindexBuffer{};
+		VkDeviceMemory fillindexMemory{};
 
-		VkBuffer unjoinedindexBuffer{};
-		VkDeviceMemory unjoinedindexMemory{};
-
-		//VkBuffer joinedindexBuffer{};
-		//VkDeviceMemory joinedindexMemory{};
+		VkBuffer lineindexBuffer{};
+		VkDeviceMemory lineindexMemory{};
 
 		VkBuffer indexSelectorBuffer{};
 		VkDeviceMemory indexSelectorMemory{};
 
 
-		uint32_t indexCount = 0;
+		uint32_t fillindexCount = 0;
+		uint32_t lineindexCount = 0;
+		uint32_t selectorCount = 0;
+
+		uint32_t* selectorPtr = nullptr;
 
 		//cpu version
 		//std::vector<MeshVertex> joinedVerticesCPU;
 		//std::vector<uint32_t> joinedIndicesCPU;
 
-		std::vector<MeshVertex> unjoinedVerticesCPU;
-		std::vector<uint32_t> unjoinedIndicesCPU;
+		std::vector<MeshVertex> VerticesCPU;
+		std::vector<uint32_t> fillIndicesCPU;
+		std::vector<uint32_t> lineIndicesCPU;
+		//std::vector<uint32_t> selectorCPU;
+
+
 	};
 	
 
@@ -184,14 +189,25 @@ public:
 
 	std::array<uint32_t, 2> pickEdge(double mouseX, double mouseY);
 
+	void vertexbuffer(std::vector<MeshVertex> vertices, Mesh& result);
+	void fillindexbuffer(std::vector<uint32_t> fillindices, Mesh& result);
+	void lineindexbuffer(std::vector<uint32_t> lineindices, Mesh& result);
+	void selectorbuffer(Mesh& result);
+
+	void VulkanBackend::setSelector(int index);
+
+
 private:
 
 	//const char* vertexShaderPath = "C:/Users/razer/source/repos/PaperCraft/PaperCraft/src/shaders/vert.spv";
 	//const char* fragmentShaderPath = "C:/Users/razer/source/repos/PaperCraft/PaperCraft/src/shaders/frag.spv";
 
-	const char* vertexShaderPath = SHADER_DIR "/vert.spv";
-	const char* filledfragmentShaderPath = SHADER_DIR "/frag_fill.spv";
-	const char* linefragmentShaderPath = SHADER_DIR "/frag_line.spv";
+	const char* fill_vertexShaderPath = SHADER_DIR "/fill_vert.spv";
+	const char* line_vertexShaderPath = SHADER_DIR "/line_vert.spv";
+	const char* line_geometryShaderPath = SHADER_DIR "/line_geom.spv";
+	const char* fragmentShaderPath = SHADER_DIR "/frag.spv";
+
+
 
 	const int MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -248,8 +264,18 @@ private:
 	};
 
 
-	bool VulkanBackend::rayHitsEdge(glm::vec3 rayOrigin,glm::vec3 rayDir,glm::vec3 a,glm::vec3 b,float threshold, float& outDist);
-	
+	bool VulkanBackend::rayHitsEdge(
+		const glm::vec3& rayOrigin,
+		const glm::vec3& rayDir,
+		const glm::vec3& a,
+		const glm::vec3& b,
+		float threshold,
+		float& outDist);
+
+	bool VulkanBackend::rayTriangleHit(const glm::vec3& rayOrigin,const glm::vec3& rayDir,const glm::vec3& v0,const glm::vec3& v1,const glm::vec3& v2,float& outT,glm::vec3& outHit);
+
+
+	float VulkanBackend::pointSegmentDistance(const glm::vec3& p,const glm::vec3& a,const glm::vec3& b);
 
 
 	void initWindow();
@@ -308,6 +334,8 @@ private:
 
 	static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
 
+	void setsixlines(std::vector<MeshVertex>& vertices, std::vector<uint32_t>& fillindices, std::vector<uint32_t>& lineindices);
+
 
 	VkShaderModule createShaderModule(const std::vector<char>& code);
 
@@ -329,7 +357,8 @@ private:
 	void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 
 
-	
+	bool rayHitsVertex(const glm::vec3& rayOrigin,const glm::vec3& rayDir,const glm::vec3& v,float threshold,float& outDist);
+
 
 	void createDescriptorSetLayout();
 
@@ -340,6 +369,7 @@ private:
 	void createDescriptorPool();
 
 	void createDescriptorSets();
+
 
 
 

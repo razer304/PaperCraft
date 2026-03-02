@@ -25,10 +25,7 @@ void InputHandler::scroll_callback(GLFWwindow* window, double xoffset, double yo
     backend->onScroll(xoffset, yoffset);
 }
 
-void InputHandler::mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
-    auto* backend = reinterpret_cast<InputHandler*>(glfwGetWindowUserPointer(window));
-    backend->onMouseButton(button, action, mods);
-}
+
 
 void InputHandler::cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
     auto* backend = reinterpret_cast<InputHandler*>(glfwGetWindowUserPointer(window));
@@ -41,6 +38,12 @@ void InputHandler::onScroll(double xoffset, double yoffset) {
 }
 
 
+
+
+ void InputHandler::mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
+    auto* backend = reinterpret_cast<InputHandler*>(glfwGetWindowUserPointer(window));
+    backend->onMouseButton(button, action, mods);
+}
 void InputHandler::onMouseButton(int button, int action, int mods) {
     if (button == GLFW_MOUSE_BUTTON_LEFT) {
         if (action == GLFW_PRESS) {
@@ -50,6 +53,8 @@ void InputHandler::onMouseButton(int button, int action, int mods) {
             ystart = gLastY;
         }
         else if (action == GLFW_RELEASE) {
+
+
             gDragging = false;
 
             double releaseX, releaseY;
@@ -61,12 +66,15 @@ void InputHandler::onMouseButton(int button, int action, int mods) {
 
             if (dist < CLICK_THRESHOLD && backend->modelLoaded) {
 
+
+                /*
+
                 std::array<uint32_t, 2> edgeindex = backend->pickEdge(releaseX, releaseY);
 
-                if (edgeindex[0] != -1) {
+                if (edgeindex[0] != UINT32_MAX) {
 
-                    uint32_t i0 = backend->gMesh.unjoinedIndicesCPU[edgeindex[0]];
-                    uint32_t i1 = backend->gMesh.unjoinedIndicesCPU[edgeindex[1]];
+                    uint32_t i0 = backend->gMesh.lineIndicesCPU[edgeindex[0]];
+                    uint32_t i1 = backend->gMesh.lineIndicesCPU[edgeindex[1]];
 
 
                     uint32_t* data;
@@ -83,12 +91,11 @@ void InputHandler::onMouseButton(int button, int action, int mods) {
                 }
 
 
-
-
-
+            */
             }
         }
     }
+
 
     if (button == GLFW_MOUSE_BUTTON_MIDDLE) {
         if (action == GLFW_PRESS) {
@@ -100,6 +107,10 @@ void InputHandler::onMouseButton(int button, int action, int mods) {
         }
     }
 }
+
+
+
+
 
 void InputHandler::onCursorMove(double xpos, double ypos) {
     if (gDragging) {

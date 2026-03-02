@@ -23,8 +23,8 @@ recently moved to vulkan
 - [x] show object on screen 
 - [x] manipulation of the object 
 - [x] highlight edges shown in viewscreen 
-- [ ] be able to select edges 
-
+- [x] be able to select edges 
+- [ ] setup edges to auto highlight and be unselectable
 
 ## Stage 2
 
