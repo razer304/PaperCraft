@@ -24,7 +24,7 @@ recently moved to vulkan
 - [x] manipulation of the object 
 - [x] highlight edges shown in viewscreen 
 - [x] be able to select edges 
-- [ ] setup edges to auto highlight and be unselectable
+- [x] setup edges to auto highlight and be unselectable
 
 ## Stage 2
 
@@ -38,7 +38,7 @@ recently moved to vulkan
 
 ### vulkan
 
-- [ ] basic fold non cut edges in code
+- [ ] basic fold non cut edges + non selected in code
 	- starting with the cut edge, look at the faces that are connected to that edge and look at the other edges on that face, for every "fold" make it 180 degrees 
 	- in the first test object this should only be 2 steps ( the two other edges in the thingy)
 	- track if a fold has been done before so we dont do it twice (maybe just by checking which folds are already 180)

@@ -149,6 +149,9 @@ void VulkanBackend::cleanupVulkan() {
 	vkDestroyBuffer(device, gMesh.indexSelectorBuffer, nullptr);
 	vkFreeMemory(device, gMesh.indexSelectorMemory, nullptr);
 
+	vkDestroyBuffer(device, gMesh.indexEdgeBuffer, nullptr);
+	vkFreeMemory(device, gMesh.indexEdgeMemory, nullptr);
+
 	vkDestroyBuffer(device, gMesh.vertexBuffer, nullptr);
 	vkFreeMemory(device, gMesh.vertexMemory, nullptr);
 
@@ -186,13 +189,15 @@ void VulkanBackend::cleanupVulkan() {
 void VulkanBackend::drawFrame() {
 
 	if (enableValidationLayers) {
-		//std::cout << "- drawFrame " << currentFrame << std::endl;
+		std::cout << "- drawFrame " << currentFrame << std::endl;
 	}
 
 
 
 
+
 	vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
+
 
 	uint32_t imageIndex;
 	VkResult result = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
@@ -200,10 +205,21 @@ void VulkanBackend::drawFrame() {
 	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized) {
 		framebufferResized = false;
 		recreateSwapChain();
+		return;
 	}
 	else if (result != VK_SUCCESS) {
 		throw std::runtime_error("failed to acquire swap chain image!");
 	}
+
+
+	if (imagesInFlight[imageIndex] != VK_NULL_HANDLE) {
+		vkWaitForFences(device, 1, &imagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
+	}
+
+	imagesInFlight[imageIndex] = inFlightFences[currentFrame];
+
+
+
 
 	// Only reset the fence if we are submitting work
 	vkResetFences(device, 1, &inFlightFences[currentFrame]);
@@ -602,7 +618,7 @@ void VulkanBackend::buildImGui() {
 
 			createDescriptorSets();
 
-			VkDeviceSize selectorSize = (gMesh.lineindexCount / 2) * sizeof(uint32_t);
+			VkDeviceSize selectorSize = (gMesh.lineCount) * sizeof(uint32_t);
 			updateSelectorDescriptors(selectorSize);
 
 		}
@@ -613,18 +629,26 @@ void VulkanBackend::buildImGui() {
 	ImGui::Begin("selector");
 
 	//ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6, 6));
+	int line_counter = 0;
 
-	for (size_t i = 0; i < gMesh.selectorCount; i++)
+	for (size_t i = 0; i < gMesh.lineCount; i++)
 	{
 		bool selected = (gMesh.selectorPtr[i] == 1);
+		bool edge = (gMesh.edgePtr[i] == 1);
 
-		std::string label = "Line " + std::to_string(i);
+		if (edge) continue;
+
+		line_counter++;
+
+		std::string label = "Line " + std::to_string(line_counter);
 
 		if (ImGui::Checkbox(label.c_str(), &selected)) {
 			gMesh.selectorPtr[i] = selected;
 		}
 
 		std::cout << "selector: " << i << " is " << selected << "which is" << gMesh.lineIndicesCPU[(i * 2) + 1] << std::endl;
+
+		std::cout << "edge: " << i << " is " << edge << "which is" << gMesh.lineIndicesCPU[(i * 2) + 1] << std::endl;
 
 	}
 	//ImGui::PopStyleVar();
@@ -732,7 +756,7 @@ VulkanBackend::Mesh VulkanBackend::loadMesh(const char* path) {
 
 
 	if (enableValidationLayers) {
-		std::cout << "selector count: " << result.selectorCount << std::endl;
+		std::cout << "selector count: " << result.lineCount << std::endl;
 		//VK_NULL_HANDLE
 		if (result.indexSelectorBuffer == NULL)
 		{
@@ -744,6 +768,7 @@ VulkanBackend::Mesh VulkanBackend::loadMesh(const char* path) {
 			std::cout << "selector is not null: " << std::endl;
 
 		}
+
 	}
 
 
@@ -757,7 +782,7 @@ VulkanBackend::Mesh VulkanBackend::loadMesh(const char* path) {
 	return result;
 }
 
-void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<uint32_t>& fillindices, std::vector<uint32_t>& lineindices) {
+void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<uint32_t>& fillindices, std::vector<uint32_t>& lineindices, std::vector<uint32_t>& non_edges) {
 
 
 
@@ -800,6 +825,7 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 			bool duplicate = FALSE;
 
+			uint32_t lineindex = -1;
 
 			for (size_t i = 0; i < lineindices.size(); i += 2)
 			{
@@ -829,18 +855,24 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 						duplicate = TRUE;
 
+						lineindex = i/2;
+
+						std::cout << "- pos equal " << lineindex << std::endl;
+
 					}
 				}
 			}
 
+
 			if (!duplicate) {
 
-
+				std::cout << "- no duplicate found, adding line: " << std::endl;
 				lineindices.push_back(fillindices[fillindices.size() - choose1[f]]);
 				lineindices.push_back(fillindices[fillindices.size() - choose2[f]]);
-				 
+
+				
 			}
-			else {
+			else{
 				//set new storage buffer for edges for this line too 0
 				//make sure it is the check_vertice_prev line that is being set to 0 cuz current line isnt being added to line indicies
 				//make sure to init the edges storage buffer to 1
@@ -848,6 +880,17 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 				//or display edges in different colour that cannot be overridden by selector
 				// and make it so that the imgui dosnt show lines that are edges and therefore cannot be affected by selector
 				//TODO: BLOOPS
+
+				std::cout << "- duplicate found, not adding line " << std::endl;
+
+				if (lineindex != -1) {
+					non_edges.push_back(lineindex);
+
+
+					std::cout << "- non edge: " << non_edges[non_edges.size() - 1] << std::endl;
+				}
+				
+
 			}
 
 		}
@@ -878,6 +921,7 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 			std::vector<MeshVertex> vertices;
 			std::vector<uint32_t> fillindices;
 			std::vector<uint32_t> lineindices;
+			std::vector<uint32_t> non_edges;
 
 
 			vertices.reserve(mesh->mNumFaces * 3);
@@ -916,64 +960,13 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 					if (fillindices.size() % 3 == 0) {
 						//line indicies
 
-						setsixlines(vertices, fillindices, lineindices);
+						setsixlines(vertices, fillindices, lineindices, non_edges);
 
 
 
 					}
 				}
 			}
-
-
-
-
-
-
-			/* regular vertex buffer creation, the fill indicies are the regular indexes, the line ones are every line of every face
-			for (unsigned int i = 0; i < mesh->mNumVertices; i++) {
-
-					MeshVertex v{};
-
-					v.pos = glm::vec3(
-						mesh->mVertices[i].x,
-						mesh->mVertices[i].y,
-						mesh->mVertices[i].z);
-					v.normal = glm::vec3(
-						mesh->mNormals[i].x,
-						mesh->mNormals[i].y,
-						mesh->mNormals[i].z);
-
-					// Assign barycentrics based on j (0,1,2)
-					//if (i == 0)
-					 //   v.bary = glm::vec3(1,0,0);
-					//else if (i == 1) v.bary = glm::vec3(0,1,0);
-					//else v.bary = glm::vec3(0,0,1);
-
-					vertices.push_back(v);
-			}
-
-			for (unsigned int i = 0; i < mesh->mNumFaces; i++) {
-				aiFace face = mesh->mFaces[i];
-
-				//fill indicies
-				fillindices.push_back(face.mIndices[0]);
-				fillindices.push_back(face.mIndices[1]);
-				fillindices.push_back(face.mIndices[2]);
-
-				//line indicies
-				lineindices.push_back(face.mIndices[0]);
-				lineindices.push_back(face.mIndices[1]);
-
-
-				lineindices.push_back(face.mIndices[1]);
-				lineindices.push_back(face.mIndices[2]);
-
-
-				lineindices.push_back(face.mIndices[2]);
-				lineindices.push_back(face.mIndices[0]);
-			}
-			*/
-
 
 
 			std::cout << "- verts : " << std::endl;
@@ -1010,12 +1003,12 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 			result.VerticesCPU = vertices;
 			result.fillIndicesCPU = fillindices;
 			result.lineIndicesCPU = lineindices;
-
+			result.non_edgesCPU = non_edges;
 
 
 			result.fillindexCount = static_cast<uint32_t>(fillindices.size());
 			result.lineindexCount = static_cast<uint32_t>(lineindices.size());
-			result.selectorCount = static_cast<uint32_t>(lineindices.size() / 2);
+			result.lineCount = static_cast<uint32_t>(lineindices.size() / 2);
 
 
 
@@ -1028,22 +1021,22 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 			//vertex buffer
 			vertexbuffer(vertices, result);
 
-
-
-
-
 			//INDEX BUFFER STUFFS!!!!!
 			fillindexbuffer(fillindices, result);
 
 
 			lineindexbuffer(lineindices, result);
 
+			std::cout << "selector start" << std::endl;
+			selectorbuffer(result);
+
+			std::cout << "selector end" << std::endl;
+
+			std::cout << "edge start" << std::endl;
+			edgebuffer(result);
 
 
-
-
-
-
+			std::cout << "edge end" << std::endl;
 
 		}
 
@@ -1175,17 +1168,13 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 			//SELECTOR BUFFER CREATION
 
 
-			std::cout << "selector start" << std::endl;
-			selectorbuffer(result);
-
-			std::cout << "selector end" << std::endl;
-
+			
 
 		}
 
 		void VulkanBackend::selectorbuffer(Mesh & result) {
 
-			std::vector<uint8_t> selector(result.selectorCount, 0);
+			std::vector<uint32_t> selector(result.lineCount, 0);
 
 
 			VkDeviceSize selectorSize = selector.size() * sizeof(uint32_t);
@@ -1220,7 +1209,7 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 
 			std::cout << "selector size: " << selectorSize << std::endl;
-			std::cout << "selector count: " << result.selectorCount << std::endl;
+			std::cout << "selector count: " << result.lineCount << std::endl;
 
 			//memcpy(result.selectorPtr, testselectorValues, sizeof(testselectorValues));
 			memcpy(result.selectorPtr, selector.data(), selectorSize);
@@ -1228,11 +1217,9 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 			check = static_cast<uint32_t*>(result.selectorPtr);
 
 
-			for (size_t i = 0; i < result.selectorCount; i++)
+			for (size_t i = 0; i < result.lineCount; i++)
 			{
 				std::cout << "selector = " << check[i] << std::endl;
-
-
 
 
 			}
@@ -1242,91 +1229,76 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 		}
 
+		void VulkanBackend::edgebuffer(Mesh& result) {
+
+			std::vector<uint32_t> edges(result.lineCount, 1);
 
 
 
-
-		/*
-
-		void VulkanBackend::createIndexBuffer(Mesh& result, aiMesh* mesh, aiMesh* joinedmesh) {
-
-			if (enableValidationLayers) {
-				std::cout << "- createIndexBuffer " << std::endl;
-			}
-
-			// Collect indices
-			std::vector<uint32_t> unjoinedindices;
-			unjoinedindices.reserve(mesh->mNumFaces * 3);
-			for (unsigned int i = 0; i < mesh->mNumFaces; i++) {
-				aiFace face = mesh->mFaces[i];
-				for (unsigned int j = 0; j < face.mNumIndices; j++) {
-					unjoinedindices.push_back(face.mIndices[j]);
-				}
-			}
-
-			std::vector<uint32_t> joinedindices;
-			joinedindices.reserve(mesh->mNumFaces * 3);
-			for (unsigned int i = 0; i < mesh->mNumFaces; i++) {
-				aiFace face = mesh->mFaces[i];
-				for (unsigned int j = 0; j < face.mNumIndices; j++) {
-					joinedindices.push_back(face.mIndices[j]);
-				}
-			}
-
-			result.joinedIndicesCPU = joinedindices;
-			result.unjoinedIndicesCPU = unjoinedindices;
-
-			for (size_t i = 0; i < unjoinedindices.size(); i++)
+			for (size_t i = 0; i < result.non_edgesCPU.size(); i++)
 			{
-				std::cout << "- unjoined indicies: " << i << ", " << unjoinedindices[i] << std::endl;
+				edges[result.non_edgesCPU[i]] = 0;
 
 			}
 
 
 
-			result.indexCount = static_cast<uint32_t>(joinedindices.size());
 
-
-
-
-
-
-			//joined index buffer
+			VkDeviceSize edgeSize = edges.size() * sizeof(uint32_t);
 
 			createBuffer(
-				indexSize,
-				VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+				edgeSize,
+				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, // or whatever you bind it as
 				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-				stagingBuffer,
-				stagingMemory
+				result.indexEdgeBuffer,
+				result.indexEdgeMemory
 			);
 
 
-			void* joineddata;
-			vkMapMemory(device, stagingMemory, 0, indexSize, 0, &joineddata);
-			memcpy(joineddata, joinedindices.data(), static_cast<size_t>(indexSize));
-			vkUnmapMemory(device, stagingMemory);
-
-			createBuffer(
-				indexSize,
-				VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-				VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-				result.joinedindexBuffer,
-				result.joinedindexMemory
-			);
-
-			copyBuffer(stagingBuffer, result.joinedindexBuffer, indexSize);
 
 
-			vkDestroyBuffer(device, stagingBuffer, nullptr);
-			vkFreeMemory(device, stagingMemory, nullptr);
 
 
+			vkMapMemory(device, result.indexEdgeMemory, 0, edgeSize, 0, (void**)&result.edgePtr);
+
+
+			//test
+			//uint32_t testselectorValues[] = {1, 0, 0, 0};
+			//uint32_t testselectorValues[] = {0, 0, 0, 1, 1, 1};
+
+
+
+
+			auto* check = static_cast<uint32_t*>(result.edgePtr);
+
+
+
+
+
+			std::cout << "edge size: " << edgeSize << std::endl;
+			std::cout << "edge count: " << result.lineCount << std::endl;
+
+			//memcpy(result.selectorPtr, testselectorValues, sizeof(testselectorValues));
+			memcpy(result.edgePtr, edges.data(), edgeSize);
+
+			check = static_cast<uint32_t*>(result.edgePtr);
+
+
+			for (size_t i = 0; i < result.lineCount; i++)
+			{
+				std::cout << "edge = " << check[i] << std::endl;
+
+
+
+
+			}
+
+			vkUnmapMemory(device, result.indexEdgeMemory);
 
 
 		}
 
-		*/
+
 
 		//vulkan stuffs
 
@@ -1353,8 +1325,13 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 				selectorInfo.offset = 0;
 				selectorInfo.range = selectorSize;
 
+				VkDescriptorBufferInfo edgesInfo{};
+				edgesInfo.buffer = gMesh.indexEdgeBuffer;
+				edgesInfo.offset = 0;
+				edgesInfo.range = selectorSize;
 
-				std::array<VkWriteDescriptorSet, 2> writes{};
+
+				std::array<VkWriteDescriptorSet, 3> writes{};
 
 				writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 				writes[0].dstSet = descriptorSets[i];
@@ -1370,6 +1347,15 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 				writes[1].descriptorCount = 1;
 				writes[1].pBufferInfo = &selectorInfo;
 
+				writes[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				writes[2].dstSet = descriptorSets[i];
+				writes[2].dstBinding = 2;
+				writes[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+				writes[2].descriptorCount = 1;
+				writes[2].pBufferInfo = &edgesInfo;
+
+
+
 				vkUpdateDescriptorSets(device, writes.size(), writes.data(), 0, nullptr);
 			}
 		}
@@ -1382,6 +1368,9 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 			if (enableValidationLayers) {
 				std::cout << "- createDescriptorSets " << std::endl;
 			}
+
+			VkDeviceSize selectorSize = (gMesh.lineCount) * sizeof(uint32_t);
+
 
 
 			std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, descriptorSetLayout);
@@ -1405,49 +1394,49 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 				VkDescriptorBufferInfo selectorInfo{};
 				selectorInfo.buffer = gMesh.indexSelectorBuffer;
 				selectorInfo.offset = 0;
-				selectorInfo.range = VK_WHOLE_SIZE;
+				selectorInfo.range = selectorSize;
 
-
-				/*
-						VkWriteDescriptorSet descriptorWrite{};
-						descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-						descriptorWrite.dstSet = descriptorSets[i];
-						descriptorWrite.dstBinding = 0;
-						descriptorWrite.dstArrayElement = 0;
-						descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-						descriptorWrite.descriptorCount = 1;
-						descriptorWrite.pBufferInfo = &bufferInfo;
-						descriptorWrite.pImageInfo = nullptr; // Optional
-						descriptorWrite.pTexelBufferView = nullptr; // Optional
+				VkDescriptorBufferInfo edgesInfo{};
+				edgesInfo.buffer = gMesh.indexEdgeBuffer;
+				edgesInfo.offset = 0;
+				edgesInfo.range = selectorSize;
 
 
 
-						vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
+				std::array<VkWriteDescriptorSet, 3> writes{};
 
-						*/
-
-
-				std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
-
-				descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-				descriptorWrites[0].dstSet = descriptorSets[i];
-				descriptorWrites[0].dstBinding = 0;
-				descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-				descriptorWrites[0].descriptorCount = 1;
-				descriptorWrites[0].pBufferInfo = &bufferInfo;
+				writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				writes[0].dstSet = descriptorSets[i];
+				writes[0].dstBinding = 0;
+				writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+				writes[0].descriptorCount = 1;
+				writes[0].pBufferInfo = &bufferInfo;
 
 
-				descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-				descriptorWrites[1].dstSet = descriptorSets[i];
-				descriptorWrites[1].dstBinding = 1;
-				descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-				descriptorWrites[1].descriptorCount = 1;
-				descriptorWrites[1].pBufferInfo = &selectorInfo;
+				writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				writes[1].dstSet = descriptorSets[i];
+				writes[1].dstBinding = 1;
+				writes[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+				writes[1].descriptorCount = 1;
+				writes[1].pBufferInfo = &selectorInfo;
 
-				vkUpdateDescriptorSets(device, descriptorWrites.size(), descriptorWrites.data(), 0, nullptr);
+				writes[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				writes[2].dstSet = descriptorSets[i];
+				writes[2].dstBinding = 2;
+				writes[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+				writes[2].descriptorCount = 1;
+				writes[2].pBufferInfo = &edgesInfo;
+
+
+				vkUpdateDescriptorSets(device, writes.size(), writes.data(), 0, nullptr);
 
 			}
 		}
+
+
+
+
+
 
 
 		void VulkanBackend::createDescriptorPool() {
@@ -1562,9 +1551,19 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 			selectLayoutBinding.pImmutableSamplers = nullptr; // Optional
 
-			std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, selectLayoutBinding };
+
+			VkDescriptorSetLayoutBinding edgeLayoutBinding{};
+			edgeLayoutBinding.binding = 2;
+			edgeLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+			edgeLayoutBinding.descriptorCount = 1;
+
+			edgeLayoutBinding.stageFlags = VK_SHADER_STAGE_GEOMETRY_BIT;
+
+			edgeLayoutBinding.pImmutableSamplers = nullptr; // Optional
 
 
+
+			std::array<VkDescriptorSetLayoutBinding, 3> bindings = { uboLayoutBinding, selectLayoutBinding, edgeLayoutBinding };
 
 
 			VkDescriptorSetLayoutCreateInfo layoutInfo{};
@@ -1721,6 +1720,8 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 			createSwapChain();
 			createImageViews();
 			createFramebuffers();
+
+			imagesInFlight.assign(swapChainImages.size(), VK_NULL_HANDLE);
 		}
 
 
@@ -2963,14 +2964,22 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 
 
+			VkPhysicalDevice8BitStorageFeatures storage8bit{};
+			storage8bit.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_8BIT_STORAGE_FEATURES;
+			storage8bit.storageBuffer8BitAccess = VK_TRUE;
+
+			
+
+
 
 			VkPhysicalDeviceFeatures deviceFeatures{};
 			deviceFeatures.fillModeNonSolid = VK_TRUE;
 			deviceFeatures.geometryShader = VK_TRUE;
 
 
-			VkDeviceCreateInfo createInfo = vkinit::device_create_info(queueCreateInfos, deviceFeatures, deviceExtensions, validationLayers, enableValidationLayers);
 
+			VkDeviceCreateInfo createInfo = vkinit::device_create_info(queueCreateInfos, deviceFeatures, deviceExtensions, validationLayers, enableValidationLayers);
+			createInfo.pNext = &storage8bit;
 
 
 			if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) != VK_SUCCESS) {
@@ -3070,7 +3079,7 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 
 
-
+			imagesInFlight.resize(swapChainImages.size(), VK_NULL_HANDLE);
 		}
 
 		VulkanBackend::SwapChainSupportDetails VulkanBackend::querySwapChainSupport(VkPhysicalDevice device) {

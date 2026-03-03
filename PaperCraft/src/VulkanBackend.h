@@ -165,12 +165,18 @@ public:
 		VkBuffer indexSelectorBuffer{};
 		VkDeviceMemory indexSelectorMemory{};
 
+		VkBuffer indexEdgeBuffer{};
+		VkDeviceMemory indexEdgeMemory{};
+
 
 		uint32_t fillindexCount = 0;
 		uint32_t lineindexCount = 0;
-		uint32_t selectorCount = 0;
+		uint32_t lineCount = 0;
 
 		uint32_t* selectorPtr = nullptr;
+		uint32_t* edgePtr = nullptr;
+
+
 
 		//cpu version
 		//std::vector<MeshVertex> joinedVerticesCPU;
@@ -179,7 +185,7 @@ public:
 		std::vector<MeshVertex> VerticesCPU;
 		std::vector<uint32_t> fillIndicesCPU;
 		std::vector<uint32_t> lineIndicesCPU;
-		//std::vector<uint32_t> selectorCPU;
+		std::vector<uint32_t> non_edgesCPU;
 
 
 	};
@@ -193,6 +199,7 @@ public:
 	void fillindexbuffer(std::vector<uint32_t> fillindices, Mesh& result);
 	void lineindexbuffer(std::vector<uint32_t> lineindices, Mesh& result);
 	void selectorbuffer(Mesh& result);
+	void edgebuffer(Mesh& result);
 
 	void VulkanBackend::setSelector(int index);
 
@@ -334,7 +341,7 @@ private:
 
 	static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
 
-	void setsixlines(std::vector<MeshVertex>& vertices, std::vector<uint32_t>& fillindices, std::vector<uint32_t>& lineindices);
+	void setsixlines(std::vector<MeshVertex>& vertices, std::vector<uint32_t>& fillindices, std::vector<uint32_t>& lineindices, std::vector<uint32_t>& non_edges);
 
 
 	VkShaderModule createShaderModule(const std::vector<char>& code);
@@ -406,6 +413,9 @@ private:
 	std::vector<VkFence> inFlightFences;
 
 	uint32_t currentFrame = 0;
+
+	std::vector<VkFence> imagesInFlight;
+
 
 	//VkBuffer vertexBuffer;
 	//VkDeviceMemory vertexBufferMemory;
