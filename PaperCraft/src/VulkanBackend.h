@@ -108,7 +108,7 @@ public:
 
 	bool modelLoaded = false;
 
-
+	int duplicateCount = 0;
 
 	struct MeshVertex {
 		glm::vec3 pos;

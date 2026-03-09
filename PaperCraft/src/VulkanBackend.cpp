@@ -634,9 +634,9 @@ void VulkanBackend::buildImGui() {
 	for (size_t i = 0; i < gMesh.lineCount; i++)
 	{
 		bool selected = (gMesh.selectorPtr[i] == 1);
-		bool edge = (gMesh.edgePtr[i] == 1);
+		bool edge = (gMesh.edgePtr[i] == -1);
 
-		if (edge) continue;
+		if (edge || gMesh.edgePtr[i] < i) continue;
 
 		line_counter++;
 
@@ -790,6 +790,8 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 	int choose2[] = { 2,1,3 };
 
 
+	uint32_t lineindex = -1;
+
 	for (size_t f = 0; f < 3; f++)
 	{
 
@@ -825,7 +827,7 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 			bool duplicate = FALSE;
 
-			uint32_t lineindex = -1;
+			
 
 			for (size_t i = 0; i < lineindices.size(); i += 2)
 			{
@@ -857,6 +859,9 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 						lineindex = i/2;
 
+
+						duplicateCount = duplicateCount + 1;
+
 						std::cout << "- pos equal " << lineindex << std::endl;
 
 					}
@@ -869,7 +874,7 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 				std::cout << "- no duplicate found, adding line: " << std::endl;
 				lineindices.push_back(fillindices[fillindices.size() - choose1[f]]);
 				lineindices.push_back(fillindices[fillindices.size() - choose2[f]]);
-
+				non_edges.push_back(-1);
 				
 			}
 			else{
@@ -883,10 +888,18 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 				std::cout << "- duplicate found, not adding line " << std::endl;
 
+				lineindices.push_back(fillindices[fillindices.size() - choose1[f]]);
+				lineindices.push_back(fillindices[fillindices.size() - choose2[f]]);
+
+
+				
+
+
 				if (lineindex != -1) {
+					//non_edges.push_back(lineindex);
+
 					non_edges.push_back(lineindex);
-
-
+					non_edges[lineindex] = non_edges.size()-1;
 					std::cout << "- non edge: " << non_edges[non_edges.size() - 1] << std::endl;
 				}
 				
@@ -901,7 +914,7 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 			lineindices.push_back(fillindices[fillindices.size() - choose1[f]]);
 			lineindices.push_back(fillindices[fillindices.size() - choose2[f]]);
-
+			non_edges.push_back(-1);
 		}
 
 	}
@@ -926,6 +939,7 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 			vertices.reserve(mesh->mNumFaces * 3);
 			fillindices.reserve(mesh->mNumFaces * 3);
+			lineindices.reserve(mesh->mNumFaces * 3);
 
 
 			for (unsigned int i = 0; i < mesh->mNumFaces; i++) {
@@ -998,7 +1012,13 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 			}
 
+			std::cout << "- edge indices: " << std::endl;
 
+			for (size_t i = 0; i < non_edges.size(); i++)
+			{
+				std::cout << "- : " << i << ", " << non_edges[i] << std::endl;
+
+			}
 
 			result.VerticesCPU = vertices;
 			result.fillIndicesCPU = fillindices;
@@ -1013,7 +1033,7 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 
 			std::cout << "line indices size: " << lineindices.size() << std::endl;
-			std::cout << "line indices count: " << result.lineindexCount << std::endl;
+			std::cout << "line indices count: " << result.lineCount << std::endl;
 
 
 
@@ -1233,11 +1253,11 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 			std::vector<uint32_t> edges(result.lineCount, 1);
 
-
+			std::cout << "cpu start" << std::endl;
 
 			for (size_t i = 0; i < result.non_edgesCPU.size(); i++)
 			{
-				edges[result.non_edgesCPU[i]] = 0;
+				edges[i] = result.non_edgesCPU[i];
 
 			}
 
@@ -1246,6 +1266,8 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 			VkDeviceSize edgeSize = edges.size() * sizeof(uint32_t);
 
+
+			std::cout << "pre create buffer" << std::endl;
 			createBuffer(
 				edgeSize,
 				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, // or whatever you bind it as
@@ -1258,7 +1280,7 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 
 
-
+			std::cout << "pre map mem " << std::endl;
 			vkMapMemory(device, result.indexEdgeMemory, 0, edgeSize, 0, (void**)&result.edgePtr);
 
 
@@ -1287,7 +1309,6 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 			for (size_t i = 0; i < result.lineCount; i++)
 			{
 				std::cout << "edge = " << check[i] << std::endl;
-
 
 
 
