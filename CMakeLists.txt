@@ -11,91 +11,90 @@ set(CMAKE_TOOLCHAIN_FILE "C:/dev/vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE S
 project(PaperCraftApp)
 
 
-
-
-
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 
 # --- Dependencies via vcpkg ---
-# These will be resolved automatically if you configured VS with vcpkg toolchain
-# --- Dependencies via vcpkg ---
+# ---------------------------------------------------------------------------------
 find_package(glfw3 CONFIG REQUIRED)
-#find_package(OpenGL REQUIRED)
 find_package(glad CONFIG REQUIRED)
-#find_package(imgui CONFIG REQUIRED)
 find_package(tinyfiledialogs CONFIG REQUIRED)
 find_package(assimp CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(VulkanMemoryAllocator CONFIG REQUIRED)
+# ---------------------------------------------------------------------------------
 
 
-#find_package(Vulkan REQUIRED)
+
+
 
 
 
 # Source files
-set(SOURCES
-    ${CMAKE_SOURCE_DIR}/PaperCraft/src/main.cpp
-    ${CMAKE_SOURCE_DIR}/PaperCraft/src/VulkanBackend.cpp
-    ${CMAKE_SOURCE_DIR}/PaperCraft/src/ModelLoader.cpp
-    ${CMAKE_SOURCE_DIR}/PaperCraft/src/vk_initializers.cpp
-    ${CMAKE_SOURCE_DIR}/PaperCraft/src/inputhandler.cpp
-
+# ---------------------------------------------------------------------------------
+file(GLOB_RECURSE PROJECT_FILES
+    "${CMAKE_SOURCE_DIR}/PaperCraft/src/*.cpp"
+    "${CMAKE_SOURCE_DIR}/PaperCraft/src/*.h"
 )
 
-set(HEADERS
-    ${CMAKE_SOURCE_DIR}/PaperCraft/src/VulkanBackend.h
-    ${CMAKE_SOURCE_DIR}/PaperCraft/src/ModelLoader.h
-    ${CMAKE_SOURCE_DIR}/PaperCraft/src/Mesh.h
-    ${CMAKE_SOURCE_DIR}/PaperCraft/src/Edge.h
-    ${CMAKE_SOURCE_DIR}/PaperCraft/src/vk_initializers.h
-    ${CMAKE_SOURCE_DIR}/PaperCraft/src/vk_types.h
-    ${CMAKE_SOURCE_DIR}/PaperCraft/src/inputhandler.h
-
-
-)
-
-
-add_library(imgui
-    external/imgui/imgui.cpp
-    external/imgui/imgui_draw.cpp
-    external/imgui/imgui_tables.cpp
-    external/imgui/imgui_widgets.cpp
-    external/imgui/imgui_demo.cpp
-
-    external/imgui/backends/imgui_impl_vulkan.cpp
-    external/imgui/backends/imgui_impl_glfw.cpp
-)
-
-
-#target_include_directories(PaperCraftApp PRIVATE external/imgui external/imgui/backends)
-
-
-
-
-
-
-
-
-add_executable(PaperCraftApp ${SOURCES} ${HEADERS} "PaperCraft/src/inputhandler.h" "PaperCraft/src/inputhandler.cpp")
-
-#add_executable(PaperCraftApp ${SOURCES} ${HEADERS} "PaperCraft/src/vk_initializers.cpp" "PaperCraft/src/vk_initializers.h")
-
+add_executable(PaperCraftApp ${PROJECT_FILES})
 
 target_include_directories(PaperCraftApp PRIVATE
     ${CMAKE_SOURCE_DIR}/PaperCraft/src
+)
+# ---------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+# ImGui
+# ---------------------------------------------------------------------------------
+target_include_directories(PaperCraftApp PUBLIC
     external/imgui
     external/imgui/backends
 )
 
+set(IMGUI_DIR "${CMAKE_SOURCE_DIR}/external/imgui")
+
+set(IMGUI_SOURCES
+    ${IMGUI_DIR}/imgui.cpp
+    ${IMGUI_DIR}/imgui_draw.cpp
+    ${IMGUI_DIR}/imgui_tables.cpp
+    ${IMGUI_DIR}/imgui_widgets.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp
+)
+
+add_library(imgui STATIC ${IMGUI_SOURCES})
+
+target_include_directories(imgui PUBLIC
+    ${IMGUI_DIR}
+    ${IMGUI_DIR}/backends
+)
+
+target_link_libraries(imgui PUBLIC glfw Vulkan::Vulkan)
+# ---------------------------------------------------------------------------------
 
 
 
 
 
-# Try to find Vulkan via the official SDK first
+
+
+
+
+
+# Try to find Vulkan via the official SDK first, then fall back to vcpkg if not found
+# ---------------------------------------------------------------------------------
 find_package(Vulkan QUIET)
 
 # Check if the LunarG Vulkan SDK is installed
@@ -108,6 +107,7 @@ else()
     find_package(vulkan REQUIRED)
     target_link_libraries(PaperCraftApp PRIVATE Vulkan::Vulkan)
 endif()
+# ---------------------------------------------------------------------------------
 
 
 
@@ -118,37 +118,40 @@ endif()
 
 
 
-#target_include_directories(fbx PUBLIC "external/FBX/include")
-
-target_link_libraries(imgui PRIVATE glfw Vulkan::Vulkan)
-
-target_include_directories(imgui PUBLIC external/imgui external/imgui/backends)
 
 
 # --- Link everything together ---
+# ---------------------------------------------------------------------------------
 target_link_libraries(PaperCraftApp
     PRIVATE
         glfw
-        #OpenGL::GL
         glad::glad
-        imgui
-        #imgui:x64-windows
         tinyfiledialogs::tinyfiledialogs
         assimp::assimp
         glm::glm
         GPUOpen::VulkanMemoryAllocator
+        imgui
 )
+# ---------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
 
 
 
 # Shader compilation
-
+# ---------------------------------------------------------------------------------
 # Shader directory relative to project root
 set(SHADER_DIR "${CMAKE_CURRENT_SOURCE_DIR}/PaperCraft/src/shaders")
 
 target_compile_definitions(PaperCraftApp PRIVATE
     SHADER_DIR="${SHADER_DIR}"
 )
+# ---------------------------------------------------------------------------------
 
 
-#add_dependencies(PaperCraftApp Shaders)

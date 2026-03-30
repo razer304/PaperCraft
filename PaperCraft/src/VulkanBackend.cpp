@@ -189,7 +189,7 @@ void VulkanBackend::cleanupVulkan() {
 void VulkanBackend::drawFrame() {
 
 	if (enableValidationLayers) {
-		std::cout << "- drawFrame " << currentFrame << std::endl;
+		//std::cout << "- drawFrame " << currentFrame << std::endl;
 	}
 
 
@@ -590,6 +590,42 @@ void VulkanBackend::initImGui() {
 }
 
 
+
+void VulkanBackend::flattenmesh() {
+
+	//cut edge is any edge / selected / done face
+
+	//looop through faces
+	
+	
+	//if face has 2 cut edges (edge / done / sekected
+	//rotate whole mesh so that face is flat on xp plane
+	// mark face 1 as done
+	//get connected line and then face of non cut edge
+	//rotate whole mesh except for done ones along the axis of that line until the face 2 is also flat on xp plane
+	// mark face 2 as done
+	//check if next face has 2 cut edges, if so repeat the process until all faces are done
+	
+	
+	//if face has 0 cut edges the thing is finnished and we can stop
+	//if face has 1 cut edge continue in looping through faces
+
+	//for (size_t i = 0; i < gMesh.vertexBuffer.size(); i++)
+	//{
+
+	//}
+
+
+
+
+
+
+}
+
+
+
+
+
 void VulkanBackend::buildImGui() {
 
 	if (enableValidationLayers) {
@@ -625,18 +661,45 @@ void VulkanBackend::buildImGui() {
 	}
 
 
+	if (ImGui::Button("Flatten")) {
+		//todo:
+		flattenmesh();
+
+
+	}
+
+	if (ImGui::Button("Add Tabs")) {
+		//todo:
+
+
+	}
+
+
+
 	// Display selected edge info
 	ImGui::Begin("selector");
 
 	//ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6, 6));
 	int line_counter = 0;
 
+	std::cout << "gui thingy" << std::endl;
+	std::cout << "   " << std::endl;
+
 	for (size_t i = 0; i < gMesh.lineCount; i++)
 	{
 		bool selected = (gMesh.selectorPtr[i] == 1);
 		bool edge = (gMesh.edgePtr[i] == -1);
 
-		if (edge || gMesh.edgePtr[i] < i) continue;
+
+
+		if (edge) continue;
+
+		std::cout << "edge: " << i << " is " << edge << "which is " << gMesh.edgePtr[i] << std::endl;
+		std::cout << "selector: " << i << " is " << selected << "which is " << gMesh.selectorPtr[i] << std::endl;
+
+
+		if (gMesh.edgePtr[i] < i) continue;
+
 
 		line_counter++;
 
@@ -644,11 +707,13 @@ void VulkanBackend::buildImGui() {
 
 		if (ImGui::Checkbox(label.c_str(), &selected)) {
 			gMesh.selectorPtr[i] = selected;
+			gMesh.selectorPtr[gMesh.edgePtr[i]] = selected;
 		}
 
-		std::cout << "selector: " << i << " is " << selected << "which is" << gMesh.lineIndicesCPU[(i * 2) + 1] << std::endl;
 
-		std::cout << "edge: " << i << " is " << edge << "which is" << gMesh.lineIndicesCPU[(i * 2) + 1] << std::endl;
+		//std::cout << "selector: " << i << " is " << selected << "which is " << gMesh.selectorPtr[i] << std::endl;
+
+		//std::cout << "edge: " << i << " is " << edge << "which is " << gMesh.edgePtr[i] << std::endl;
 
 	}
 	//ImGui::PopStyleVar();

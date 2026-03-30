@@ -175,7 +175,7 @@ public:
 
 		uint32_t* selectorPtr = nullptr;
 		uint32_t* edgePtr = nullptr;
-
+		uint32_t* vertPtr = nullptr;
 
 
 		//cpu version
@@ -320,6 +320,8 @@ private:
 	void createFilledGraohicsPipeline(VkPipelineShaderStageCreateInfo* shaderStages, VkPipelineVertexInputStateCreateInfo vertexInputInfo, VkPipelineInputAssemblyStateCreateInfo inputAssembly, VkPipelineViewportStateCreateInfo viewportState, VkPipelineDynamicStateCreateInfo dynamicState);
 
 	void createLinedGraohicsPipeline(VkPipelineShaderStageCreateInfo* shaderStages, VkPipelineVertexInputStateCreateInfo vertexInputInfo, VkPipelineInputAssemblyStateCreateInfo inputAssembly, VkPipelineViewportStateCreateInfo viewportState, VkPipelineDynamicStateCreateInfo dynamicState);
+
+	void flattenmesh();
 
 	void createRenderPass();
 
