@@ -1457,7 +1457,9 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 			VkDeviceSize selectorSize = (gMesh.lineCount) * sizeof(uint32_t);
 
-
+			if (enableValidationLayers) {
+				std::cout << "-- createDescriptorSets 1" << std::endl;
+			}
 
 			std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, descriptorSetLayout);
 			VkDescriptorSetAllocateInfo allocInfo{};
@@ -1466,9 +1468,24 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 			allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 			allocInfo.pSetLayouts = layouts.data();
 
+
+			if (enableValidationLayers) {
+				std::cout << "-- createDescriptorSets 2" << std::endl;
+			}
+
+
 			descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
+
+			if (enableValidationLayers) {
+				std::cout << "-- createDescriptorSets 3" << std::endl;
+			}
+
 			if (vkAllocateDescriptorSets(device, &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
 				throw std::runtime_error("failed to allocate descriptor sets!");
+			}
+
+			if (enableValidationLayers) {
+				std::cout << "-- createDescriptorSets 4" << std::endl;
 			}
 
 			for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
@@ -1531,15 +1548,23 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 				std::cout << "- createDescriptorPool " << std::endl;
 			}
 
+			std::array<VkDescriptorPoolSize, 3> poolSizes{};
+			
+			poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
-			VkDescriptorPoolSize poolSize{};
-			poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			poolSize.descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+			poolSizes[1].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+			poolSizes[1].descriptorCount = MAX_FRAMES_IN_FLIGHT;
+
+			poolSizes[2].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+			poolSizes[2].descriptorCount = MAX_FRAMES_IN_FLIGHT;
+
+
 
 			VkDescriptorPoolCreateInfo poolInfo{};
 			poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-			poolInfo.poolSizeCount = 1;
-			poolInfo.pPoolSizes = &poolSize;
+			poolInfo.poolSizeCount = poolSizes.size();
+			poolInfo.pPoolSizes = poolSizes.data();
 
 			poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
