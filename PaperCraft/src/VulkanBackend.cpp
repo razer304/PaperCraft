@@ -2642,11 +2642,11 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 
 
-
+				
 				if (!checkValidationLayerSupport()) {
 					throw std::runtime_error("validation layers requested, but not available!");
 				}
-
+				
 
 
 			}
@@ -2742,6 +2742,7 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 				bool layerFound = false;
 
 				for (const auto& layerProperties : availableLayers) {
+					std::cout << layerProperties.layerName << std::endl;
 					if (strcmp(layerName, layerProperties.layerName) == 0) {
 						layerFound = true;
 						break;
