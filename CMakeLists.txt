@@ -35,10 +35,16 @@ find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 # ---------------------------------------------------------------------------------
 file(GLOB_RECURSE PROJECT_FILES
     "${CMAKE_SOURCE_DIR}/PaperCraft/src/*.cpp"
+)
+
+file(GLOB_RECURSE PROJECT_HEADERS
     "${CMAKE_SOURCE_DIR}/PaperCraft/src/*.h"
 )
 
-add_executable(PaperCraftApp ${PROJECT_FILES})
+add_executable(PaperCraftApp 
+    ${PROJECT_FILES}
+    ${PROJECT_HEADERS}
+)
 
 target_include_directories(PaperCraftApp PRIVATE
     ${CMAKE_SOURCE_DIR}/PaperCraft/src

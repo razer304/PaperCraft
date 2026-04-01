@@ -276,7 +276,6 @@ void VulkanBackend::setSelector(int index) {
 
 
 	gMesh.selectorPtr[index] ^= 1;
-	//gMesh.selectorCPU[index] ^= 1;
 
 
 }
