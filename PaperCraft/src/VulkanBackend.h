@@ -185,7 +185,7 @@ public:
 		std::vector<MeshVertex> VerticesCPU;
 		std::vector<uint32_t> fillIndicesCPU;
 		std::vector<uint32_t> lineIndicesCPU;
-		std::vector<uint32_t> non_edgesCPU;
+		std::vector<uint32_t> duplicate_edgesCPU;
 
 
 	};

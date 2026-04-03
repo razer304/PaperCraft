@@ -847,7 +847,7 @@ VulkanBackend::Mesh VulkanBackend::loadMesh(const char* path) {
 	return result;
 }
 
-void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<uint32_t>& fillindices, std::vector<uint32_t>& lineindices, std::vector<uint32_t>& non_edges) {
+void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<uint32_t>& fillindices, std::vector<uint32_t>& lineindices, std::vector<uint32_t>& duplicate_edges) {
 
 
 
@@ -939,7 +939,7 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 				std::cout << "- no duplicate found, adding line: " << std::endl;
 				lineindices.push_back(fillindices[fillindices.size() - choose1[f]]);
 				lineindices.push_back(fillindices[fillindices.size() - choose2[f]]);
-				non_edges.push_back(-1);
+				duplicate_edges.push_back(-1);
 				
 			}
 			else{
@@ -963,9 +963,9 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 				if (lineindex != -1) {
 					//non_edges.push_back(lineindex);
 
-					non_edges.push_back(lineindex);
-					non_edges[lineindex] = non_edges.size()-1;
-					std::cout << "- non edge: " << non_edges[non_edges.size() - 1] << std::endl;
+					duplicate_edges.push_back(lineindex);
+					duplicate_edges[lineindex] = duplicate_edges.size()-1;
+					std::cout << "- non edge: " << duplicate_edges[duplicate_edges.size() - 1] << std::endl;
 				}
 				
 
@@ -979,7 +979,7 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 			lineindices.push_back(fillindices[fillindices.size() - choose1[f]]);
 			lineindices.push_back(fillindices[fillindices.size() - choose2[f]]);
-			non_edges.push_back(-1);
+			duplicate_edges.push_back(-1);
 		}
 
 	}
@@ -999,7 +999,7 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 			std::vector<MeshVertex> vertices;
 			std::vector<uint32_t> fillindices;
 			std::vector<uint32_t> lineindices;
-			std::vector<uint32_t> non_edges;
+			std::vector<uint32_t> duplicate_edges;
 
 
 			vertices.reserve(mesh->mNumFaces * 3);
@@ -1039,7 +1039,7 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 					if (fillindices.size() % 3 == 0) {
 						//line indicies
 
-						setsixlines(vertices, fillindices, lineindices, non_edges);
+						setsixlines(vertices, fillindices, lineindices, duplicate_edges);
 
 
 
@@ -1079,16 +1079,16 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 			std::cout << "- edge indices: " << std::endl;
 
-			for (size_t i = 0; i < non_edges.size(); i++)
+			for (size_t i = 0; i < duplicate_edges.size(); i++)
 			{
-				std::cout << "- : " << i << ", " << non_edges[i] << std::endl;
+				std::cout << "- : " << i << ", " << duplicate_edges[i] << std::endl;
 
 			}
 
 			result.VerticesCPU = vertices;
 			result.fillIndicesCPU = fillindices;
 			result.lineIndicesCPU = lineindices;
-			result.non_edgesCPU = non_edges;
+			result.duplicate_edgesCPU = duplicate_edges;
 
 
 			result.fillindexCount = static_cast<uint32_t>(fillindices.size());
@@ -1320,9 +1320,9 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 			std::cout << "cpu start" << std::endl;
 
-			for (size_t i = 0; i < result.non_edgesCPU.size(); i++)
+			for (size_t i = 0; i < result.duplicate_edgesCPU.size(); i++)
 			{
-				edges[i] = result.non_edgesCPU[i];
+				edges[i] = result.duplicate_edgesCPU[i];
 
 			}
 
