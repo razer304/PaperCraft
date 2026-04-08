@@ -101,6 +101,8 @@ public:
 
 	void VulkanBackend::initProject();
 
+	void VulkanBackend::changenextline();
+
 
 	const float edgePickThreshold = 0.1f; // Adjust as needed for sensitivity
 
@@ -153,29 +155,48 @@ public:
 
 
 	struct Mesh {
+		
+		//vertex buffer
 		VkBuffer vertexBuffer{};
 		VkDeviceMemory vertexMemory{};
 
+
+		//index buffers
 		VkBuffer fillindexBuffer{};
 		VkDeviceMemory fillindexMemory{};
 
 		VkBuffer lineindexBuffer{};
 		VkDeviceMemory lineindexMemory{};
 
-		VkBuffer indexSelectorBuffer{};
-		VkDeviceMemory indexSelectorMemory{};
+		//storage buffers
+		VkBuffer SelectorStorageBuffer{};
+		VkDeviceMemory SelectorStorageMemory{};
 
-		VkBuffer indexEdgeBuffer{};
-		VkDeviceMemory indexEdgeMemory{};
+		VkBuffer DuplicateEdgeStorageBuffer{};
+		VkDeviceMemory DuplicateEdgeStorageMemory{};
+
+		VkBuffer DoneEdgeStorageBuffer{};
+		VkDeviceMemory DoneEdgeStorageMemory{};
+
+
 
 
 		uint32_t fillindexCount = 0;
 		uint32_t lineindexCount = 0;
 		uint32_t lineCount = 0;
 
+
+		//uint32_t* vertPtr = nullptr;
+
+		//uint32_t* fillindexPtr = nullptr;
+		//uint32_t* lineindexPtr = nullptr;
+
 		uint32_t* selectorPtr = nullptr;
-		uint32_t* edgePtr = nullptr;
-		uint32_t* vertPtr = nullptr;
+		uint32_t* dupedgePtr = nullptr;
+		uint32_t* doneedgePtr = nullptr;
+		
+
+
 
 
 		//cpu version
@@ -189,6 +210,9 @@ public:
 
 
 	};
+
+
+
 	
 
 	Mesh gMesh;
@@ -199,9 +223,18 @@ public:
 	void fillindexbuffer(std::vector<uint32_t> fillindices, Mesh& result);
 	void lineindexbuffer(std::vector<uint32_t> lineindices, Mesh& result);
 	void selectorbuffer(Mesh& result);
+	void doneedgesbuffer(Mesh& result);
 	void edgebuffer(Mesh& result);
 
 	void VulkanBackend::setSelector(int index);
+
+	void updatevertexbuffer();
+
+	bool VulkanBackend::check_facewithtwocuts(std::array<uint8_t, 3> face_vert_indicies);
+
+	glm::vec3 VulkanBackend::facewithtwocuts(std::array<uint8_t, 3> face_vert_indicies);
+
+	glm::quat VulkanBackend::getrotatefacedown(glm::vec3 srcnormal);
 
 
 private:

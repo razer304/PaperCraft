@@ -1,6 +1,8 @@
 #include "VulkanBackend.h"
 #include "vk_initializers.h"
 #include "inputhandler.h"
+#include <glm/gtx/quaternion.hpp>
+
 
 void VulkanBackend::runVulkanBackend() {
 	if (enableValidationLayers) {
@@ -146,11 +148,11 @@ void VulkanBackend::cleanupVulkan() {
 	vkDestroyBuffer(device, gMesh.fillindexBuffer, nullptr);
 	vkFreeMemory(device, gMesh.fillindexMemory, nullptr);
 
-	vkDestroyBuffer(device, gMesh.indexSelectorBuffer, nullptr);
-	vkFreeMemory(device, gMesh.indexSelectorMemory, nullptr);
+	vkDestroyBuffer(device, gMesh.SelectorStorageBuffer, nullptr);
+	vkFreeMemory(device, gMesh.SelectorStorageMemory, nullptr);
 
-	vkDestroyBuffer(device, gMesh.indexEdgeBuffer, nullptr);
-	vkFreeMemory(device, gMesh.indexEdgeMemory, nullptr);
+	vkDestroyBuffer(device, gMesh.DuplicateEdgeStorageBuffer, nullptr);
+	vkFreeMemory(device, gMesh.DuplicateEdgeStorageMemory, nullptr);
 
 	vkDestroyBuffer(device, gMesh.vertexBuffer, nullptr);
 	vkFreeMemory(device, gMesh.vertexMemory, nullptr);
@@ -596,10 +598,40 @@ void VulkanBackend::flattenmesh() {
 	//cut edge is any edge / selected / done face
 
 	//looop through faces
+
+
+	std::vector<MeshVertex> transformedVertices = gMesh.VerticesCPU;
+
+	int vertsize = transformedVertices.size();
+
+
+
+	for (size_t facestartvert = 0; facestartvert < vertsize; facestartvert = facestartvert +3)
+	{
+		//if face has 2 cut edges (edge / done / sekected
+
+		std::array<uint8_t, 3> face_vert_indicies = { facestartvert, facestartvert + 1, facestartvert + 2 };
+
+
+		if (check_facewithtwocuts(face_vert_indicies)) {
+
+			glm::vec3 cut_edges = facewithtwocuts(face_vert_indicies);
+
+
+			if (transformedVertices[face_vert_indicies[0]].normal != glm::vec3{0, 0, -1}) {
+
+				//gets the quaternion that rotates the face normal to point downwards
+				glm::quat down_quaternion = getrotatefacedown(glm::normalize(transformedVertices[face_vert_indicies[0]].normal));
+
+				//todo!!!
+				//rotate whole mesh (includeing normals) so that face is flat on ground
+			}
+
+		}
+	}
+
+
 	
-	
-	//if face has 2 cut edges (edge / done / sekected
-	//rotate whole mesh so that face is flat on xp plane
 	// mark face 1 as done
 	//get connected line and then face of non cut edge
 	//rotate whole mesh except for done ones along the axis of that line until the face 2 is also flat on xp plane
@@ -619,8 +651,89 @@ void VulkanBackend::flattenmesh() {
 
 
 
+	glm::mat4 transform = glm::mat4(1.0f);
+	//transform = glm::translate(transform, glm::vec3(1, 0, 0.0f));
+	transform = glm::rotate(transform, glm::degrees((float) 90), glm::vec3(1, 0, 0));
+
+
+
+	std::vector<MeshVertex> transformedVerts = gMesh.VerticesCPU;
+
+
+	/*
+	for (auto& v : transformedVerts) {
+		glm::vec4 p = glm::vec4(v.pos, 1.0f);
+		p = transform * p;
+		v.pos = glm::vec3(p);
+	}
+	*/
+
+	glm::vec4 p = glm::vec4(transformedVerts[0].pos, 1.0f);
+	p = transform * p;
+	transformedVerts[0].pos = glm::vec3(p);
+
+
+	gMesh.VerticesCPU = transformedVerts;
+
+
+	updatevertexbuffer();
+
 
 }
+
+
+bool VulkanBackend::check_facewithtwocuts(std::array<uint8_t, 3> face_vert_indicies) {
+
+
+	uint8_t cuts = 0;
+	for (size_t i = 0; i < 3; i++)
+	{
+		if (gMesh.dupedgePtr[face_vert_indicies[i]] == 1 || gMesh.selectorPtr[face_vert_indicies[i]] == 1)
+		{
+			cuts++;
+		}
+	}
+
+
+	if (cuts == 2)
+	{
+		return true;
+	}
+	else {
+		false;
+	}
+
+
+}
+
+
+glm::vec3 VulkanBackend::facewithtwocuts(std::array<uint8_t, 3> face_vert_indicies)
+{
+	glm::vec3 cut_edges = { 0,0,0 };
+
+	for (size_t i = 0; i < 3; i++)
+	{
+		if (gMesh.dupedgePtr[face_vert_indicies[i]] == 1 || gMesh.selectorPtr[face_vert_indicies[i]] == 1)
+		{
+			cut_edges[i] = 1;
+		}
+	}
+
+	return cut_edges;
+
+}
+
+
+glm::quat VulkanBackend::getrotatefacedown(glm::vec3 srcnormal) {
+
+
+	glm::vec3 downnormal = {0, 0, -1};
+
+	 return glm::rotation(glm::normalize(srcnormal),glm::normalize(downnormal));
+
+
+}
+
 
 
 
@@ -668,9 +781,10 @@ void VulkanBackend::buildImGui() {
 
 	}
 
-	if (ImGui::Button("Add Tabs")) {
-		//todo:
+	if (ImGui::Button("proceed")) {
+		//iterate line picking algorythm
 
+		changenextline();
 
 	}
 
@@ -688,17 +802,17 @@ void VulkanBackend::buildImGui() {
 	for (size_t i = 0; i < gMesh.lineCount; i++)
 	{
 		bool selected = (gMesh.selectorPtr[i] == 1);
-		bool edge = (gMesh.edgePtr[i] == -1);
+		bool edge = (gMesh.dupedgePtr[i] == -1);
 
 
 
 		if (edge) continue;
 
-		std::cout << "edge: " << i << " is " << edge << "which is " << gMesh.edgePtr[i] << std::endl;
+		std::cout << "edge: " << i << " is " << edge << "which is " << gMesh.dupedgePtr[i] << std::endl;
 		std::cout << "selector: " << i << " is " << selected << "which is " << gMesh.selectorPtr[i] << std::endl;
 
 
-		if (gMesh.edgePtr[i] < i) continue;
+		if (gMesh.dupedgePtr[i] < i) continue;
 
 
 		line_counter++;
@@ -707,7 +821,7 @@ void VulkanBackend::buildImGui() {
 
 		if (ImGui::Checkbox(label.c_str(), &selected)) {
 			gMesh.selectorPtr[i] = selected;
-			gMesh.selectorPtr[gMesh.edgePtr[i]] = selected;
+			gMesh.selectorPtr[gMesh.dupedgePtr[i]] = selected;
 		}
 
 
@@ -724,7 +838,17 @@ void VulkanBackend::buildImGui() {
 }
 
 
+void VulkanBackend::changenextline() {
 
+
+
+
+
+
+
+
+
+}
 
 //single time command buffer helper functions
 
@@ -823,7 +947,7 @@ VulkanBackend::Mesh VulkanBackend::loadMesh(const char* path) {
 	if (enableValidationLayers) {
 		std::cout << "selector count: " << result.lineCount << std::endl;
 		//VK_NULL_HANDLE
-		if (result.indexSelectorBuffer == NULL)
+		if (result.SelectorStorageBuffer == NULL)
 		{
 			std::cout << "selector i snull: " << std::endl;
 
@@ -1117,6 +1241,15 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 			std::cout << "selector end" << std::endl;
 
+
+			std::cout << "doneedges start" << std::endl;
+			doneedgesbuffer(result);
+
+			std::cout << "doneedges end" << std::endl;
+
+
+
+
 			std::cout << "edge start" << std::endl;
 			edgebuffer(result);
 
@@ -1144,6 +1277,15 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 				stagingMemory
 			);
 
+
+
+
+
+
+
+			//vkMapMemory(device, result.DuplicateEdgeStorageMemory, 0, edgeSize, 0, (void**)&result.dupedgePtr);
+
+
 			void* data;
 			vkMapMemory(device, stagingMemory, 0, vertexSize, 0, &data);
 			memcpy(data, vertices.data(), static_cast<size_t>(vertexSize));
@@ -1163,6 +1305,58 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 			vkFreeMemory(device, stagingMemory, nullptr);
 
 		}
+
+
+
+		void VulkanBackend::updatevertexbuffer() {
+		
+		
+			std::cout << "updatevertexbuffer start" << std::endl;
+
+
+			VkDeviceSize vertexSize = gMesh.VerticesCPU.size() * sizeof(MeshVertex);
+
+
+
+
+			VkBuffer stagingBuffer;
+			VkDeviceMemory stagingMemory;
+
+			createBuffer(
+				vertexSize,
+				VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+				stagingBuffer,
+				stagingMemory
+			);
+
+
+
+			void* data;
+			vkMapMemory(device, stagingMemory, 0, vertexSize, 0, &data);
+			memcpy(data, gMesh.VerticesCPU.data(), static_cast<size_t>(vertexSize));
+			vkUnmapMemory(device, stagingMemory);
+
+			vkDestroyBuffer(device, gMesh.vertexBuffer, nullptr);
+			//vkUnmapMemory(device, gMesh.vertexMemory);
+
+
+
+			createBuffer(
+				vertexSize,
+				VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+				VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+				gMesh.vertexBuffer,
+				gMesh.vertexMemory
+			);
+
+			copyBuffer(stagingBuffer, gMesh.vertexBuffer, vertexSize);
+
+			vkDestroyBuffer(device, stagingBuffer, nullptr);
+			vkFreeMemory(device, stagingMemory, nullptr);
+		
+		}
+
 
 		void VulkanBackend::fillindexbuffer(std::vector<uint32_t> fillindices, Mesh & result) {
 			std::cout << "fill indexbuffer start" << std::endl;
@@ -1257,6 +1451,11 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 		}
 
+
+
+
+
+
 		void VulkanBackend::selectorbuffer(Mesh & result) {
 
 			std::vector<uint32_t> selector(result.lineCount, 0);
@@ -1268,8 +1467,8 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 				selectorSize,
 				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, // or whatever you bind it as
 				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-				result.indexSelectorBuffer,
-				result.indexSelectorMemory
+				result.SelectorStorageBuffer,
+				result.SelectorStorageMemory
 			);
 
 
@@ -1277,7 +1476,7 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 
 
-			vkMapMemory(device, result.indexSelectorMemory, 0, selectorSize, 0, (void**)&result.selectorPtr);
+			vkMapMemory(device, result.SelectorStorageMemory, 0, selectorSize, 0, (void**)&result.selectorPtr);
 
 
 			//test
@@ -1309,10 +1508,74 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 			}
 
-			vkUnmapMemory(device, result.indexSelectorMemory);
+			vkUnmapMemory(device, result.SelectorStorageMemory);
 
 
 		}
+
+
+
+
+		
+		void VulkanBackend::doneedgesbuffer(Mesh& result) {
+
+			std::vector<uint32_t> dones(result.lineCount, 0);
+
+
+			VkDeviceSize donesSize = dones.size() * sizeof(uint32_t);
+
+			createBuffer(
+				donesSize,
+				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, // or whatever you bind it as
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+				result.DoneEdgeStorageBuffer,
+				result.DoneEdgeStorageMemory
+			);
+
+
+
+
+
+
+			vkMapMemory(device, result.DoneEdgeStorageMemory, 0, donesSize, 0, (void**)&result.doneedgePtr);
+
+
+			//test
+			//uint32_t testselectorValues[] = {1, 0, 0, 0};
+			//uint32_t testselectorValues[] = {0, 0, 0, 1, 1, 1};
+
+
+
+
+			//auto* check = static_cast<uint32_t*>(result.selectorPtr);
+
+
+
+
+
+			std::cout << "done size: " << donesSize << std::endl;
+			std::cout << "done count: " << result.lineCount << std::endl;
+
+			//memcpy(result.selectorPtr, testselectorValues, sizeof(testselectorValues));
+			memcpy(result.doneedgePtr, dones.data(), donesSize);
+
+			auto* check = static_cast<uint32_t*>(result.doneedgePtr);
+
+
+			for (size_t i = 0; i < result.lineCount; i++)
+			{
+				std::cout << "done = " << check[i] << std::endl;
+
+
+			}
+
+			vkUnmapMemory(device, result.DoneEdgeStorageMemory);
+
+
+		}
+
+
+
 
 		void VulkanBackend::edgebuffer(Mesh& result) {
 
@@ -1337,8 +1600,8 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 				edgeSize,
 				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, // or whatever you bind it as
 				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-				result.indexEdgeBuffer,
-				result.indexEdgeMemory
+				result.DuplicateEdgeStorageBuffer,
+				result.DuplicateEdgeStorageMemory
 			);
 
 
@@ -1346,17 +1609,12 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 
 			std::cout << "pre map mem " << std::endl;
-			vkMapMemory(device, result.indexEdgeMemory, 0, edgeSize, 0, (void**)&result.edgePtr);
-
-
-			//test
-			//uint32_t testselectorValues[] = {1, 0, 0, 0};
-			//uint32_t testselectorValues[] = {0, 0, 0, 1, 1, 1};
+			vkMapMemory(device, result.DuplicateEdgeStorageMemory, 0, edgeSize, 0, (void**)&result.dupedgePtr);
 
 
 
 
-			auto* check = static_cast<uint32_t*>(result.edgePtr);
+			auto* check = static_cast<uint32_t*>(result.dupedgePtr);
 
 
 
@@ -1365,21 +1623,18 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 			std::cout << "edge size: " << edgeSize << std::endl;
 			std::cout << "edge count: " << result.lineCount << std::endl;
 
-			//memcpy(result.selectorPtr, testselectorValues, sizeof(testselectorValues));
-			memcpy(result.edgePtr, edges.data(), edgeSize);
+			memcpy(result.dupedgePtr, edges.data(), edgeSize);
 
-			check = static_cast<uint32_t*>(result.edgePtr);
+			check = static_cast<uint32_t*>(result.dupedgePtr);
 
 
 			for (size_t i = 0; i < result.lineCount; i++)
 			{
 				std::cout << "edge = " << check[i] << std::endl;
 
-
-
 			}
 
-			vkUnmapMemory(device, result.indexEdgeMemory);
+			vkUnmapMemory(device, result.DuplicateEdgeStorageMemory);
 
 
 		}
@@ -1407,12 +1662,12 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 				uboInfo.range = sizeof(UniformBufferObject); // use your actual UBO type
 
 				VkDescriptorBufferInfo selectorInfo{};
-				selectorInfo.buffer = gMesh.indexSelectorBuffer;
+				selectorInfo.buffer = gMesh.SelectorStorageBuffer;
 				selectorInfo.offset = 0;
 				selectorInfo.range = selectorSize;
 
 				VkDescriptorBufferInfo edgesInfo{};
-				edgesInfo.buffer = gMesh.indexEdgeBuffer;
+				edgesInfo.buffer = gMesh.DuplicateEdgeStorageBuffer;
 				edgesInfo.offset = 0;
 				edgesInfo.range = selectorSize;
 
@@ -1495,12 +1750,12 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 				bufferInfo.range = sizeof(UniformBufferObject);
 
 				VkDescriptorBufferInfo selectorInfo{};
-				selectorInfo.buffer = gMesh.indexSelectorBuffer;
+				selectorInfo.buffer = gMesh.SelectorStorageBuffer;
 				selectorInfo.offset = 0;
 				selectorInfo.range = selectorSize;
 
 				VkDescriptorBufferInfo edgesInfo{};
-				edgesInfo.buffer = gMesh.indexEdgeBuffer;
+				edgesInfo.buffer = gMesh.DuplicateEdgeStorageBuffer;
 				edgesInfo.offset = 0;
 				edgesInfo.range = selectorSize;
 
