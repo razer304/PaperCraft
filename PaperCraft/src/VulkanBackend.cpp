@@ -667,6 +667,7 @@ void VulkanBackend::flattenmesh() {
 					for (size_t i = 0; i < 3; i++)
 					{
 						// mark lines of face 1 as done
+						std::cout << " doneline: " << face_vert_indicies[i] << std::endl;
 						gMesh.doneedgePtr[face_vert_indicies[i]] = 1;
 
 						//gets the next face that is connected to the non cut edge of the current face
@@ -675,6 +676,8 @@ void VulkanBackend::flattenmesh() {
 							//floor should make it round down
 							
 							nextline = gMesh.dupedgePtr[face_vert_indicies[i]];
+
+							std::cout << " dup doneline: " << nextline << std::endl;
 							gMesh.doneedgePtr[nextline] = 1;
 
 							nextface = std::floor(nextline / 3);
@@ -697,15 +700,20 @@ void VulkanBackend::flattenmesh() {
 					std::cout << " next face rotaty line: " << nextline << std::endl;
 
 
-					if (transformedVertices[next_face_vert_indicies[0]].normal == glm::vec3{0,0,-1})
+
+					if (transformedVertices[next_face_vert_indicies[0]].normal == transformedVertices[face_vert_indicies[0]].normal)
 					{
 
 
 						for (size_t i = 0; i < 3; i++)
 						{
+							std::cout << " doneline: " << next_face_vert_indicies[i] << std::endl;
+
 							gMesh.doneedgePtr[next_face_vert_indicies[i]] = 1;
 							if (gMesh.dupedgePtr[next_face_vert_indicies[i]] != -1)
 							{
+								std::cout << " testy doneline: " << std::endl;
+								std::cout << " doneline: " << gMesh.dupedgePtr[next_face_vert_indicies[i]] << std::endl;
 								gMesh.doneedgePtr[gMesh.dupedgePtr[next_face_vert_indicies[i]]] = 1;
 							}
 						}
@@ -768,6 +776,19 @@ void VulkanBackend::flattenmesh() {
 	//glm::vec4 p = glm::vec4(transformedVerts[0].pos, 1.0f);
 	//p = transform * p;
 	//transformedVerts[0].pos = glm::vec3(p);
+
+
+	std::cout << "LIST OF DONES" << std::endl;
+
+	for (size_t done_lines = 0; done_lines < gMesh.lineCount; done_lines++)
+	{
+		
+		std::cout << "line: "<< done_lines << " done: " << gMesh.doneedgePtr[done_lines] << std::endl;
+
+
+	}
+
+
 
 
 	gMesh.VerticesCPU = transformedVertices;
