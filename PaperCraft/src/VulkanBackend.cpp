@@ -594,6 +594,9 @@ void VulkanBackend::initImGui() {
 
 void VulkanBackend::flattenmesh() {
 
+
+	std::cout << "- flatten mesh start" << std::endl;
+
 	//cut edge is any edge / selected / done face
 
 	//looop through faces
@@ -605,33 +608,128 @@ void VulkanBackend::flattenmesh() {
 
 
 
-	for (size_t facestartvert = 0; facestartvert < vertsize; facestartvert = facestartvert +3)
+	for (size_t facestartvert = 0; facestartvert < vertsize; facestartvert = facestartvert + 3)
 	{
-		//if face has 2 cut edges (edge / done / sekected
+		std::cout << " ALL FACES LOOP START: " << facestartvert << std::endl;
 
-		std::array<uint8_t, 3> face_vert_indicies = { facestartvert, facestartvert + 1, facestartvert + 2 };
-
-
-		if (check_facewithtwocuts(face_vert_indicies)) {
-
-			glm::vec3 cut_edges = facewithtwocuts(face_vert_indicies);
+		if (gMesh.doneedgePtr[facestartvert] != 1)
+		{
+			std::cout << " ALL FACES LOOP not done: " << std::endl;
 
 
-			if (transformedVertices[face_vert_indicies[0]].normal != glm::vec3{0, 0, -1}) {
+			std::array<uint32_t, 3> face_vert_indicies = { facestartvert, facestartvert + 1, facestartvert + 2 };
 
-				//gets the quaternion that rotates the face normal to point downwards
-				glm::quat down_quaternion = getrotatefacedown(glm::normalize(transformedVertices[face_vert_indicies[0]].normal));
+			//if face has 2 cut edges (edge / done / selected)
 
-				//todo!!!
-				//rotate whole mesh (includeing normals) so that face is flat on ground
+			std::cout << " pre check facestartvert: " << facestartvert << std::endl;
+
+
+			std::cout << " pre check face_vert_indicies: " << face_vert_indicies[0] << ", " << face_vert_indicies[1] << ", " << face_vert_indicies[2] << std::endl;
+
+
+			if (check_facewithtwocuts(face_vert_indicies)) {
+
+				std::array < uint32_t, 3> cut_edges = facewithtwocuts(face_vert_indicies);
+
+				std::cout << "cut edges " << cut_edges[0] << ", " << cut_edges[1] << ", " << cut_edges[2] << std::endl;
+
+
+
+
+				std::cout << "checking vert: " << face_vert_indicies[0] << std::endl;
+				std::cout << "pre check normal: " << transformedVertices[face_vert_indicies[0]].normal.x << ", " << transformedVertices[face_vert_indicies[0]].normal.y << ", " << transformedVertices[face_vert_indicies[0]].normal.z << std::endl;
+
+				//if face normal is not already pointing downwards
+				if (transformedVertices[face_vert_indicies[0]].normal != glm::vec3{ 0, 0, -1 }) {
+					std::cout << "pre rotate normal: " << transformedVertices[face_vert_indicies[0]].normal.x << ", " << transformedVertices[face_vert_indicies[0]].normal.y << ", " << transformedVertices[face_vert_indicies[0]].normal.z << std::endl;
+
+
+					//gets the quaternion that rotates the face normal to point downwards
+					glm::quat down_quaternion = getrotatefacedown(transformedVertices[face_vert_indicies[0]].normal);
+
+					std::cout << "down quaternion: " << down_quaternion.x << ", " << down_quaternion.y << ", " << down_quaternion.z << ", " << down_quaternion.w << std::endl;
+
+
+					//rotate whole mesh (includeing normals) so that face is flat on ground
+					for (auto& v : transformedVertices)
+					{
+						v.pos = down_quaternion * v.pos;
+						v.normal = glm::normalize(down_quaternion * v.normal);
+					}
+
+					std::cout << "transformed normal: " << transformedVertices[face_vert_indicies[0]].normal.x << ", " << transformedVertices[face_vert_indicies[0]].normal.y << ", " << transformedVertices[face_vert_indicies[0]].normal.z << std::endl;
+
+
+
+					uint32_t nextline;
+					uint32_t nextface;
+
+					for (size_t i = 0; i < 3; i++)
+					{
+						// mark lines of face 1 as done
+						gMesh.doneedgePtr[face_vert_indicies[i]] = 1;
+
+						//gets the next face that is connected to the non cut edge of the current face
+						if (cut_edges[i] == 0)
+						{
+							//floor should make it round down
+							
+							nextline = gMesh.dupedgePtr[face_vert_indicies[i]];
+							gMesh.doneedgePtr[nextline] = 1;
+
+							nextface = std::floor(nextline / 3);
+
+
+							std::cout << "next face: " << nextface << std::endl;
+							std::cout << "curr face: " << std::floor(face_vert_indicies[i] / 3) << std::endl;
+
+						}
+
+
+
+
+					}
+
+					
+					std::array<uint32_t, 3> next_face_vert_indicies = { nextface * 3, nextface * 3 + 1, nextface * 3 + 2 };
+
+					std::cout << " next face verts: " << next_face_vert_indicies[0] << ", " << next_face_vert_indicies[1] << ", " << next_face_vert_indicies[2] << std::endl;
+					std::cout << " next face rotaty line: " << nextline << std::endl;
+
+
+					if (transformedVertices[next_face_vert_indicies[0]].normal == glm::vec3{0,0,-1})
+					{
+
+
+						for (size_t i = 0; i < 3; i++)
+						{
+							gMesh.doneedgePtr[next_face_vert_indicies[i]] = 1;
+							if (gMesh.dupedgePtr[next_face_vert_indicies[i]] != -1)
+							{
+								gMesh.doneedgePtr[gMesh.dupedgePtr[next_face_vert_indicies[i]]] = 1;
+							}
+						}
+
+
+
+					}
+
+
+				}
+
 			}
 
+
+
+		}
+		else
+		{
+			std::cout << " ALL FACES LOOP done: " << std::endl;
 		}
 	}
 
 
 	
-	// mark face 1 as done
 	//get connected line and then face of non cut edge
 	//rotate whole mesh except for done ones along the axis of that line until the face 2 is also flat on xp plane
 	// mark face 2 as done
@@ -650,13 +748,13 @@ void VulkanBackend::flattenmesh() {
 
 
 
-	glm::mat4 transform = glm::mat4(1.0f);
+	//glm::mat4 transform = glm::mat4(1.0f);
 	//transform = glm::translate(transform, glm::vec3(1, 0, 0.0f));
-	transform = glm::rotate(transform, glm::degrees((float) 90), glm::vec3(1, 0, 0));
+	//transform = glm::rotate(transform, glm::degrees((float) 90), glm::vec3(1, 0, 0));
 
 
 
-	std::vector<MeshVertex> transformedVerts = gMesh.VerticesCPU;
+	//std::vector<MeshVertex> transformedVerts = gMesh.VerticesCPU;
 
 
 	/*
@@ -667,12 +765,12 @@ void VulkanBackend::flattenmesh() {
 	}
 	*/
 
-	glm::vec4 p = glm::vec4(transformedVerts[0].pos, 1.0f);
-	p = transform * p;
-	transformedVerts[0].pos = glm::vec3(p);
+	//glm::vec4 p = glm::vec4(transformedVerts[0].pos, 1.0f);
+	//p = transform * p;
+	//transformedVerts[0].pos = glm::vec3(p);
 
 
-	gMesh.VerticesCPU = transformedVerts;
+	gMesh.VerticesCPU = transformedVertices;
 
 
 	updatevertexbuffer();
@@ -681,41 +779,68 @@ void VulkanBackend::flattenmesh() {
 }
 
 
-bool VulkanBackend::check_facewithtwocuts(std::array<uint8_t, 3> face_vert_indicies) {
+bool VulkanBackend::check_facewithtwocuts(std::array<uint32_t, 3> face_vert_indicies) {
 
+	std::cout << "face_vert_indicies: " << face_vert_indicies[0] << ", " << face_vert_indicies[1] << ", " << face_vert_indicies[2] << std::endl;
 
-	uint8_t cuts = 0;
+	uint32_t cuts = 0;
 	for (size_t i = 0; i < 3; i++)
 	{
-		if (gMesh.dupedgePtr[face_vert_indicies[i]] == 1 || gMesh.selectorPtr[face_vert_indicies[i]] == 1)
+
+		bool duplicate_edges = (gMesh.dupedgePtr[face_vert_indicies[i]] != -1);
+		bool select_edges = (gMesh.selectorPtr[face_vert_indicies[i]] == 1);
+
+
+		std::cout << "line: " << face_vert_indicies[i] << " dup edge: " << gMesh.dupedgePtr[face_vert_indicies[i]] << " select: " << gMesh.selectorPtr[face_vert_indicies[i]] << std::endl;
+
+
+
+
+		if (!duplicate_edges || select_edges)
 		{
+			std::cout << "CUT EDGE line: " << face_vert_indicies[i] << std::endl;
+
 			cuts++;
 		}
 	}
 
 
+	std::cout << "CUTS: " << cuts << std::endl;
+
 	if (cuts == 2)
 	{
+		std::cout << "2 CUTS: " << std::endl;
 		return true;
 	}
 	else {
-		false;
+
+		std::cout << "NOT 2 CUTS: " << std::endl;
+		return false;
 	}
 
 
 }
 
 
-glm::vec3 VulkanBackend::facewithtwocuts(std::array<uint8_t, 3> face_vert_indicies)
+std::array < uint32_t, 3> VulkanBackend::facewithtwocuts(std::array<uint32_t, 3> face_vert_indicies)
 {
-	glm::vec3 cut_edges = { 0,0,0 };
+	std::array < uint32_t, 3> cut_edges = { 0,0,0 };
 
 	for (size_t i = 0; i < 3; i++)
 	{
-		if (gMesh.dupedgePtr[face_vert_indicies[i]] == 1 || gMesh.selectorPtr[face_vert_indicies[i]] == 1)
+
+		bool duplicate_edges = (gMesh.dupedgePtr[face_vert_indicies[i]] != -1);
+		bool select_edges = (gMesh.selectorPtr[face_vert_indicies[i]] == 1);
+
+
+
+		if (!duplicate_edges || select_edges)
 		{
+			std::cout << "CUT EDGE line: " << face_vert_indicies[i] << std::endl;
+
 			cut_edges[i] = 1;
 		}
+
 	}
 
 	return cut_edges;
@@ -728,7 +853,21 @@ glm::quat VulkanBackend::getrotatefacedown(glm::vec3 srcnormal) {
 
 	glm::vec3 downnormal = {0, 0, -1};
 
-	 return glm::rotation(glm::normalize(srcnormal),glm::normalize(downnormal));
+
+	float dot = glm::dot(glm::normalize(srcnormal), downnormal);
+
+	// If vectors are opposite (dot ≈ -1), glm::rotation fails
+	if (dot < -0.9999f)
+	{
+		// Rotate 180 degrees around ANY axis perpendicular to srcnormal
+		glm::vec3 axis = glm::normalize(glm::cross(srcnormal, glm::vec3(1, 0, 0)));
+		if (glm::length(axis) < 0.001f)
+			axis = glm::normalize(glm::cross(srcnormal, glm::vec3(0, 1, 0)));
+
+		return glm::angleAxis(glm::pi<float>(), axis);
+	}
+
+	 return glm::rotation(srcnormal,downnormal);
 
 
 }
@@ -795,8 +934,8 @@ void VulkanBackend::buildImGui() {
 	//ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6, 6));
 	int line_counter = 0;
 
-	std::cout << "gui thingy" << std::endl;
-	std::cout << "   " << std::endl;
+	//std::cout << "gui thingy" << std::endl;
+	//std::cout << "   " << std::endl;
 
 	for (size_t i = 0; i < gMesh.lineCount; i++)
 	{
@@ -807,8 +946,8 @@ void VulkanBackend::buildImGui() {
 
 		if (edge) continue;
 
-		std::cout << "edge: " << i << " is " << edge << "which is " << gMesh.dupedgePtr[i] << std::endl;
-		std::cout << "selector: " << i << " is " << selected << "which is " << gMesh.selectorPtr[i] << std::endl;
+		//std::cout << "edge: " << i << " is " << edge << "which is " << gMesh.dupedgePtr[i] << std::endl;
+		//std::cout << "selector: " << i << " is " << selected << "which is " << gMesh.selectorPtr[i] << std::endl;
 
 
 		if (gMesh.dupedgePtr[i] < i) continue;
@@ -938,6 +1077,8 @@ VulkanBackend::Mesh VulkanBackend::loadMesh(const char* path) {
 	aiMesh* mesh = scene->mMeshes[0]; // just take the first mesh
 
 
+
+		std::cout << "vertex 0 normals: " << mesh[0].mNormals << std::endl;
 
 	createVertexBuffer(result, mesh);
 	//createIndexBuffers(result, mesh);
@@ -1670,8 +1811,13 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 				edgesInfo.offset = 0;
 				edgesInfo.range = selectorSize;
 
+				VkDescriptorBufferInfo donesInfo{};
+				donesInfo.buffer = gMesh.DoneEdgeStorageBuffer;
+				donesInfo.offset = 0;
+				donesInfo.range = selectorSize;
 
-				std::array<VkWriteDescriptorSet, 3> writes{};
+
+				std::array<VkWriteDescriptorSet, 4> writes{};
 
 				writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 				writes[0].dstSet = descriptorSets[i];
@@ -1693,6 +1839,13 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 				writes[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 				writes[2].descriptorCount = 1;
 				writes[2].pBufferInfo = &edgesInfo;
+
+				writes[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				writes[3].dstSet = descriptorSets[i];
+				writes[3].dstBinding = 3;
+				writes[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+				writes[3].descriptorCount = 1;
+				writes[3].pBufferInfo = &donesInfo;
 
 
 
@@ -1802,7 +1955,7 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 				std::cout << "- createDescriptorPool " << std::endl;
 			}
 
-			std::array<VkDescriptorPoolSize, 3> poolSizes{};
+			std::array<VkDescriptorPoolSize, 4> poolSizes{};
 			
 			poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 			poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
@@ -1813,6 +1966,8 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 			poolSizes[2].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 			poolSizes[2].descriptorCount = MAX_FRAMES_IN_FLIGHT;
 
+			poolSizes[3].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+			poolSizes[3].descriptorCount = MAX_FRAMES_IN_FLIGHT;
 
 
 			VkDescriptorPoolCreateInfo poolInfo{};
@@ -1927,8 +2082,18 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 			edgeLayoutBinding.pImmutableSamplers = nullptr; // Optional
 
 
+			VkDescriptorSetLayoutBinding doneLayoutBinding{};
+			doneLayoutBinding.binding = 3;
+			doneLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+			doneLayoutBinding.descriptorCount = 1;
 
-			std::array<VkDescriptorSetLayoutBinding, 3> bindings = { uboLayoutBinding, selectLayoutBinding, edgeLayoutBinding };
+			doneLayoutBinding.stageFlags = VK_SHADER_STAGE_GEOMETRY_BIT;
+
+			doneLayoutBinding.pImmutableSamplers = nullptr; // Optional
+
+
+
+			std::array<VkDescriptorSetLayoutBinding, 4> bindings = { uboLayoutBinding, selectLayoutBinding, edgeLayoutBinding, doneLayoutBinding };
 
 
 			VkDescriptorSetLayoutCreateInfo layoutInfo{};

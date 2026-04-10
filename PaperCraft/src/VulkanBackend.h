@@ -10,6 +10,8 @@
 #include <fstream>
 #include <array>
 
+#define GLM_ENABLE_EXPERIMENTAL
+
 #include <glm/glm.hpp>
 
 
@@ -230,9 +232,9 @@ public:
 
 	void updatevertexbuffer();
 
-	bool VulkanBackend::check_facewithtwocuts(std::array<uint8_t, 3> face_vert_indicies);
+	bool VulkanBackend::check_facewithtwocuts(std::array<uint32_t, 3> face_vert_indicies);
 
-	glm::vec3 VulkanBackend::facewithtwocuts(std::array<uint8_t, 3> face_vert_indicies);
+	std::array < uint32_t, 3> VulkanBackend::facewithtwocuts(std::array<uint32_t, 3> face_vert_indicies);
 
 	glm::quat VulkanBackend::getrotatefacedown(glm::vec3 srcnormal);
 
