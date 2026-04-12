@@ -211,6 +211,7 @@ public:
 		std::vector<uint32_t> duplicate_edgesCPU;
 
 
+
 	};
 
 
@@ -237,6 +238,12 @@ public:
 	std::array < uint32_t, 3> VulkanBackend::facewithtwocuts(std::array<uint32_t, 3> face_vert_indicies);
 
 	glm::quat VulkanBackend::getrotatefacedown(glm::vec3 srcnormal);
+
+	bool VulkanBackend::rotatenonstillverts(std::vector<bool> stilllines, uint32_t face_vert_indicies, uint32_t nextline);
+
+
+	std::array<uint32_t, 3> VulkanBackend::faceindex2verts(uint32_t nextface);
+	std::array<uint32_t, 2> VulkanBackend::lineindex2verts(uint32_t nextline);
 
 
 private:

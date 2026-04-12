@@ -602,14 +602,17 @@ void VulkanBackend::flattenmesh() {
 	//looop through faces
 
 
-	std::vector<MeshVertex> transformedVertices = gMesh.VerticesCPU;
+	//std::vector<MeshVertex> transformedVertices = gMesh.VerticesCPU;
 
-	int vertsize = transformedVertices.size();
+	int vertsize = gMesh.VerticesCPU.size();
 
 
 
 	for (size_t facestartvert = 0; facestartvert < vertsize; facestartvert = facestartvert + 3)
 	{
+		std::vector<bool> stillverts(vertsize, false);
+
+
 		std::cout << " ALL FACES LOOP START: " << facestartvert << std::endl;
 
 		if (gMesh.doneedgePtr[facestartvert] != 1)
@@ -637,38 +640,42 @@ void VulkanBackend::flattenmesh() {
 
 
 				std::cout << "checking vert: " << face_vert_indicies[0] << std::endl;
-				std::cout << "pre check normal: " << transformedVertices[face_vert_indicies[0]].normal.x << ", " << transformedVertices[face_vert_indicies[0]].normal.y << ", " << transformedVertices[face_vert_indicies[0]].normal.z << std::endl;
+				std::cout << "pre check normal: " << gMesh.VerticesCPU[face_vert_indicies[0]].normal.x << ", " << gMesh.VerticesCPU[face_vert_indicies[0]].normal.y << ", " << gMesh.VerticesCPU[face_vert_indicies[0]].normal.z << std::endl;
 
 				//if face normal is not already pointing downwards
-				if (transformedVertices[face_vert_indicies[0]].normal != glm::vec3{ 0, 0, -1 }) {
-					std::cout << "pre rotate normal: " << transformedVertices[face_vert_indicies[0]].normal.x << ", " << transformedVertices[face_vert_indicies[0]].normal.y << ", " << transformedVertices[face_vert_indicies[0]].normal.z << std::endl;
+				if (gMesh.VerticesCPU[face_vert_indicies[0]].normal != glm::vec3{ 0, 0, -1 }) {
+					std::cout << "pre rotate normal: " << gMesh.VerticesCPU[face_vert_indicies[0]].normal.x << ", " << gMesh.VerticesCPU[face_vert_indicies[0]].normal.y << ", " << gMesh.VerticesCPU[face_vert_indicies[0]].normal.z << std::endl;
 
 
 					//gets the quaternion that rotates the face normal to point downwards
-					glm::quat down_quaternion = getrotatefacedown(transformedVertices[face_vert_indicies[0]].normal);
+					glm::quat down_quaternion = getrotatefacedown(gMesh.VerticesCPU[face_vert_indicies[0]].normal);
 
 					std::cout << "down quaternion: " << down_quaternion.x << ", " << down_quaternion.y << ", " << down_quaternion.z << ", " << down_quaternion.w << std::endl;
 
 
 					//rotate whole mesh (includeing normals) so that face is flat on ground
-					for (auto& v : transformedVertices)
+					for (auto& v : gMesh.VerticesCPU)
 					{
 						v.pos = down_quaternion * v.pos;
 						v.normal = glm::normalize(down_quaternion * v.normal);
 					}
 
-					std::cout << "transformed normal: " << transformedVertices[face_vert_indicies[0]].normal.x << ", " << transformedVertices[face_vert_indicies[0]].normal.y << ", " << transformedVertices[face_vert_indicies[0]].normal.z << std::endl;
+					std::cout << "transformed normal: " << gMesh.VerticesCPU[face_vert_indicies[0]].normal.x << ", " << gMesh.VerticesCPU[face_vert_indicies[0]].normal.y << ", " << gMesh.VerticesCPU[face_vert_indicies[0]].normal.z << std::endl;
 
 
 
 					uint32_t nextline;
 					uint32_t nextface;
 
+					
+
 					for (size_t i = 0; i < 3; i++)
 					{
 						// mark lines of face 1 as done
 						std::cout << " doneline: " << face_vert_indicies[i] << std::endl;
 						gMesh.doneedgePtr[face_vert_indicies[i]] = 1;
+
+						stillverts[face_vert_indicies[i]] = true;
 
 						//gets the next face that is connected to the non cut edge of the current face
 						if (cut_edges[i] == 0)
@@ -683,45 +690,15 @@ void VulkanBackend::flattenmesh() {
 							nextface = std::floor(nextline / 3);
 
 
-							std::cout << "next face: " << nextface << std::endl;
 							std::cout << "curr face: " << std::floor(face_vert_indicies[i] / 3) << std::endl;
+							std::cout << "next face: " << nextface << std::endl;
 
 						}
 
-
-
-
 					}
-
 					
-					std::array<uint32_t, 3> next_face_vert_indicies = { nextface * 3, nextface * 3 + 1, nextface * 3 + 2 };
 
-					std::cout << " next face verts: " << next_face_vert_indicies[0] << ", " << next_face_vert_indicies[1] << ", " << next_face_vert_indicies[2] << std::endl;
-					std::cout << " next face rotaty line: " << nextline << std::endl;
-
-
-
-					if (transformedVertices[next_face_vert_indicies[0]].normal == transformedVertices[face_vert_indicies[0]].normal)
-					{
-
-
-						for (size_t i = 0; i < 3; i++)
-						{
-							std::cout << " doneline: " << next_face_vert_indicies[i] << std::endl;
-
-							gMesh.doneedgePtr[next_face_vert_indicies[i]] = 1;
-							if (gMesh.dupedgePtr[next_face_vert_indicies[i]] != -1)
-							{
-								std::cout << " testy doneline: " << std::endl;
-								std::cout << " doneline: " << gMesh.dupedgePtr[next_face_vert_indicies[i]] << std::endl;
-								gMesh.doneedgePtr[gMesh.dupedgePtr[next_face_vert_indicies[i]]] = 1;
-							}
-						}
-
-
-
-					}
-
+					rotatenonstillverts(stillverts, nextface, nextline);
 
 				}
 
@@ -755,29 +732,6 @@ void VulkanBackend::flattenmesh() {
 
 
 
-
-	//glm::mat4 transform = glm::mat4(1.0f);
-	//transform = glm::translate(transform, glm::vec3(1, 0, 0.0f));
-	//transform = glm::rotate(transform, glm::degrees((float) 90), glm::vec3(1, 0, 0));
-
-
-
-	//std::vector<MeshVertex> transformedVerts = gMesh.VerticesCPU;
-
-
-	/*
-	for (auto& v : transformedVerts) {
-		glm::vec4 p = glm::vec4(v.pos, 1.0f);
-		p = transform * p;
-		v.pos = glm::vec3(p);
-	}
-	*/
-
-	//glm::vec4 p = glm::vec4(transformedVerts[0].pos, 1.0f);
-	//p = transform * p;
-	//transformedVerts[0].pos = glm::vec3(p);
-
-
 	std::cout << "LIST OF DONES" << std::endl;
 
 	for (size_t done_lines = 0; done_lines < gMesh.lineCount; done_lines++)
@@ -791,12 +745,68 @@ void VulkanBackend::flattenmesh() {
 
 
 
-	gMesh.VerticesCPU = transformedVertices;
+	//gMesh.VerticesCPU = transformedVertices;
 
 
 	updatevertexbuffer();
 
 
+}
+
+
+std::array<uint32_t, 3> VulkanBackend::faceindex2verts(uint32_t nextface) {
+
+	return { nextface * 3, nextface * 3 + 1, nextface * 3 + 2 };
+}
+
+std::array<uint32_t, 2> VulkanBackend::lineindex2verts(uint32_t nextline) {
+
+	return { gMesh.lineIndicesCPU[nextline * 2], gMesh.lineIndicesCPU[nextline * 2 + 1] };
+}
+
+
+
+
+bool VulkanBackend::rotatenonstillverts(std::vector<bool> stillverts, uint32_t nextface, uint32_t rotateline) {
+
+	std::array<uint32_t, 3> face_vert_indicies = faceindex2verts(nextface);
+	std::array<uint32_t, 2> line_vert_indicies = lineindex2verts(rotateline);
+
+
+
+
+	std::cout << " next face vert-indicie v0: " << face_vert_indicies[0] << ", vert-pos:  x:" << gMesh.VerticesCPU[face_vert_indicies[0]].pos.x << ", y:" << gMesh.VerticesCPU[face_vert_indicies[0]].pos.y << ", z:" << gMesh.VerticesCPU[face_vert_indicies[0]].pos.z << std::endl;
+	std::cout << " next face vert-indicie v1: " << face_vert_indicies[1] << ", vert-pos:  x:" << gMesh.VerticesCPU[face_vert_indicies[1]].pos.x << ", y:" << gMesh.VerticesCPU[face_vert_indicies[1]].pos.y << ", z:" << gMesh.VerticesCPU[face_vert_indicies[1]].pos.z << std::endl;
+	std::cout << " next face vert-indicie v2: " << face_vert_indicies[2] << ", vert-pos:  x:" << gMesh.VerticesCPU[face_vert_indicies[2]].pos.x << ", y:" << gMesh.VerticesCPU[face_vert_indicies[2]].pos.y << ", z:" << gMesh.VerticesCPU[face_vert_indicies[2]].pos.z << std::endl;
+
+
+	std::cout << " rotaty line-indicie v0: " << line_vert_indicies[0] << ", line-pos: x:" << gMesh.VerticesCPU[line_vert_indicies[0]].pos.x << ", y:" << gMesh.VerticesCPU[line_vert_indicies[0]].pos.y << ", z:" << gMesh.VerticesCPU[line_vert_indicies[0]].pos.z << std::endl;
+	std::cout << " rotaty line-indicie v1: " << line_vert_indicies[1] << ", line-pos: x:" << gMesh.VerticesCPU[line_vert_indicies[1]].pos.x << ", y:" << gMesh.VerticesCPU[line_vert_indicies[1]].pos.y << ", z:" << gMesh.VerticesCPU[line_vert_indicies[1]].pos.z << std::endl;
+
+	//TODO: get good quat
+	glm::quat rotate_quaternion;
+
+
+
+	for (size_t i = 0; i < gMesh.VerticesCPU.size(); i++)
+	{
+		if (!stillverts[i])
+		{
+			//gMesh.VerticesCPU[i].pos = rotate_quaternion * gMesh.VerticesCPU[i].pos;
+			//gMesh.VerticesCPU[i].normal = glm::normalize(rotate_quaternion * gMesh.VerticesCPU[i].normal);
+
+		}
+	}
+
+
+
+
+	//add lines of the new face to stilllines
+	//recurse if there is a rotate line on the next face (theres 2 edges)
+
+
+
+	return true;
 }
 
 
