@@ -421,7 +421,7 @@ private:
 
 	void createDescriptorSets();
 
-
+	glm::quat getrotatealongline(glm::vec3 srcnormal, std::array<uint32_t, 2> lineVertIndices);
 
 
 	VkDebugUtilsMessengerEXT debugMessenger;

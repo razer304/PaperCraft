@@ -107,6 +107,8 @@ void VulkanBackend::mainLoop() {
 	}
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
+
+
 		drawFrame();
 
 	}
@@ -784,7 +786,12 @@ bool VulkanBackend::rotatenonstillverts(std::vector<bool> stillverts, uint32_t n
 	std::cout << " rotaty line-indicie v1: " << line_vert_indicies[1] << ", line-pos: x:" << gMesh.VerticesCPU[line_vert_indicies[1]].pos.x << ", y:" << gMesh.VerticesCPU[line_vert_indicies[1]].pos.y << ", z:" << gMesh.VerticesCPU[line_vert_indicies[1]].pos.z << std::endl;
 
 	//TODO: get good quat
-	glm::quat rotate_quaternion;
+	glm::quat rotate_quaternion = getrotatealongline(gMesh.VerticesCPU[face_vert_indicies[0]].normal, line_vert_indicies);
+
+
+
+
+	//glm::quat down_quaternion = getrotatefacedown(gMesh.VerticesCPU[face_vert_indicies[0]].normal);
 
 
 
@@ -792,8 +799,8 @@ bool VulkanBackend::rotatenonstillverts(std::vector<bool> stillverts, uint32_t n
 	{
 		if (!stillverts[i])
 		{
-			//gMesh.VerticesCPU[i].pos = rotate_quaternion * gMesh.VerticesCPU[i].pos;
-			//gMesh.VerticesCPU[i].normal = glm::normalize(rotate_quaternion * gMesh.VerticesCPU[i].normal);
+			gMesh.VerticesCPU[i].pos = rotate_quaternion * gMesh.VerticesCPU[i].pos;
+			gMesh.VerticesCPU[i].normal = glm::normalize(rotate_quaternion * gMesh.VerticesCPU[i].normal);
 
 		}
 	}
@@ -802,12 +809,52 @@ bool VulkanBackend::rotatenonstillverts(std::vector<bool> stillverts, uint32_t n
 
 
 	//add lines of the new face to stilllines
+	 
+	
+	
+	
 	//recurse if there is a rotate line on the next face (theres 2 edges)
 
 
 
 	return true;
 }
+
+
+
+glm::quat VulkanBackend::getrotatealongline(glm::vec3 srcnormal, std::array<uint32_t, 2> lineVertIndices) {
+
+
+	glm::vec3 downnormal = { 0, 0, -1 };
+
+
+
+
+
+	glm::vec3 axis = normalize(gMesh.VerticesCPU[lineVertIndices[0]].pos - gMesh.VerticesCPU[lineVertIndices[1]].pos);
+
+
+	glm::vec3 n0 = glm::normalize(srcnormal);
+	glm::vec3 n1 = glm::normalize(downnormal);
+
+	// Remove the component along the axis
+	n0 = glm::normalize(n0 - axis * glm::dot(n0, axis));
+	n1 = glm::normalize(n1 - axis * glm::dot(n1, axis));
+
+
+	float dot = glm::clamp(glm::dot(n0, n1), -1.0f, 1.0f);
+	float angle = acos(dot);
+
+	glm::vec3 crossv = glm::cross(n0, n1);
+	if (glm::dot(crossv, axis) < 0.0f)
+		angle = -angle;
+
+
+	return glm::angleAxis(angle, axis);
+
+
+}
+
 
 
 bool VulkanBackend::check_facewithtwocuts(std::array<uint32_t, 3> face_vert_indicies) {
@@ -3430,6 +3477,9 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 			VkPhysicalDeviceProperties deviceProperties;
 			VkPhysicalDeviceFeatures deviceFeatures;
+
+
+
 			vkGetPhysicalDeviceProperties(device, &deviceProperties);
 			vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
 
@@ -3454,7 +3504,7 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 			}
 
 
-
+	
 			return score;
 		}
 
@@ -3537,6 +3587,7 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 			VkPhysicalDeviceFeatures deviceFeatures{};
 			deviceFeatures.fillModeNonSolid = VK_TRUE;
 			deviceFeatures.geometryShader = VK_TRUE;
+			deviceFeatures.vertexPipelineStoresAndAtomics = VK_TRUE;
 
 
 
