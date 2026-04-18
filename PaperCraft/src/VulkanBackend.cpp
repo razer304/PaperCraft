@@ -629,7 +629,11 @@ void VulkanBackend::flattenmesh() {
 			std::cout << " pre check facestartvert: " << facestartvert << std::endl;
 
 
-			std::cout << " pre check face_vert_indicies: " << face_vert_indicies[0] << ", " << face_vert_indicies[1] << ", " << face_vert_indicies[2] << std::endl;
+			std::cout << " pre check face vert-indicie v0: " << face_vert_indicies[0] << ", vert-pos:  x:" << gMesh.VerticesCPU[face_vert_indicies[0]].pos.x << ", y:" << gMesh.VerticesCPU[face_vert_indicies[0]].pos.y << ", z:" << gMesh.VerticesCPU[face_vert_indicies[0]].pos.z << std::endl;
+			std::cout << " pre check face vert-indicie v1: " << face_vert_indicies[1] << ", vert-pos:  x:" << gMesh.VerticesCPU[face_vert_indicies[1]].pos.x << ", y:" << gMesh.VerticesCPU[face_vert_indicies[1]].pos.y << ", z:" << gMesh.VerticesCPU[face_vert_indicies[1]].pos.z << std::endl;
+			std::cout << " pre check face vert-indicie v2: " << face_vert_indicies[2] << ", vert-pos:  x:" << gMesh.VerticesCPU[face_vert_indicies[2]].pos.x << ", y:" << gMesh.VerticesCPU[face_vert_indicies[2]].pos.y << ", z:" << gMesh.VerticesCPU[face_vert_indicies[2]].pos.z << std::endl;
+
+
 
 
 			if (check_facewithtwocuts(face_vert_indicies)) {
@@ -757,11 +761,22 @@ void VulkanBackend::flattenmesh() {
 
 
 std::array<uint32_t, 3> VulkanBackend::faceindex2verts(uint32_t nextface) {
+	std::cout << "faceindex2verts start " << std::endl;
+
+	std::cout << "faceindex2verts 0: " << nextface * 3 << std::endl;
+	std::cout << "faceindex2verts 1: " << nextface * 3 + 1 << std::endl;
+	std::cout << "faceindex2verts 2: " << nextface * 3 + 2 << std::endl;
+
+
 
 	return { nextface * 3, nextface * 3 + 1, nextface * 3 + 2 };
 }
 
 std::array<uint32_t, 2> VulkanBackend::lineindex2verts(uint32_t nextline) {
+	std::cout << "lineindex2verts start " << std::endl;
+
+	std::cout << "lineindex2verts 0: " << gMesh.lineIndicesCPU[nextline * 2] << std::endl;
+	std::cout << "lineindex2verts 1: " << gMesh.lineIndicesCPU[nextline * 2 + 1] << std::endl;
 
 	return { gMesh.lineIndicesCPU[nextline * 2], gMesh.lineIndicesCPU[nextline * 2 + 1] };
 }
@@ -771,10 +786,13 @@ std::array<uint32_t, 2> VulkanBackend::lineindex2verts(uint32_t nextline) {
 
 bool VulkanBackend::rotatenonstillverts(std::vector<bool> stillverts, uint32_t nextface, uint32_t rotateline) {
 
+	std::cout << "rotatenonstillverts start " << std::endl;
+
+
 	std::array<uint32_t, 3> face_vert_indicies = faceindex2verts(nextface);
 	std::array<uint32_t, 2> line_vert_indicies = lineindex2verts(rotateline);
 
-
+	std::cout << "lineindex2verts end " << std::endl;
 
 
 	std::cout << " next face vert-indicie v0: " << face_vert_indicies[0] << ", vert-pos:  x:" << gMesh.VerticesCPU[face_vert_indicies[0]].pos.x << ", y:" << gMesh.VerticesCPU[face_vert_indicies[0]].pos.y << ", z:" << gMesh.VerticesCPU[face_vert_indicies[0]].pos.z << std::endl;
@@ -789,6 +807,7 @@ bool VulkanBackend::rotatenonstillverts(std::vector<bool> stillverts, uint32_t n
 	glm::quat rotate_quaternion = getrotatealongline(gMesh.VerticesCPU[face_vert_indicies[0]].normal, line_vert_indicies);
 
 
+	std::cout << " rotaty quaternion: x: " << rotate_quaternion.x << ", y: " << rotate_quaternion.y << ", z: " << rotate_quaternion.z << std::endl;
 
 
 	//glm::quat down_quaternion = getrotatefacedown(gMesh.VerticesCPU[face_vert_indicies[0]].normal);
@@ -799,22 +818,69 @@ bool VulkanBackend::rotatenonstillverts(std::vector<bool> stillverts, uint32_t n
 	{
 		if (!stillverts[i])
 		{
+			std::cout << " rotating vert: " << i << std::endl;
+
 			gMesh.VerticesCPU[i].pos = rotate_quaternion * gMesh.VerticesCPU[i].pos;
 			gMesh.VerticesCPU[i].normal = glm::normalize(rotate_quaternion * gMesh.VerticesCPU[i].normal);
 
 		}
 	}
 
+	
 
 
-
-	//add lines of the new face to stilllines
+	//add verts of the new face to stillverts
 	 
+	stillverts[face_vert_indicies[0]] = true;
+	stillverts[face_vert_indicies[1]] = true;
+	stillverts[face_vert_indicies[2]] = true;
+
 	
-	
-	
+	gMesh.doneedgePtr[rotateline] = 1;
+	gMesh.doneedgePtr[gMesh.dupedgePtr[rotateline]] = 1;
+
+
+	std::cout << " - pre reccur check: " << std::endl;
+
+
 	//recurse if there is a rotate line on the next face (theres 2 edges)
 
+	//updatevertexbuffer();
+
+	if (check_facewithtwocuts(face_vert_indicies))
+	{
+		std::cout << " - reccur check success " << std::endl;
+
+
+
+
+		std::cout << "pre cutedge " << std::endl;
+
+
+		uint32_t cut_edge = facewithtwocuts2(face_vert_indicies);
+		std::cout << "cut edge " << cut_edge << std::endl;
+
+
+		std::cout << "pre linerotate " << std::endl;
+
+
+		uint32_t linetorotate = gMesh.duplicate_edgesCPU[cut_edge];
+
+		std::cout << "pre newface " << std::endl;
+
+
+		uint32_t newface = std::floor(linetorotate / 3);
+
+		std::cout << "pre rotate " << std::endl;
+
+		rotatenonstillverts(stillverts, newface, linetorotate);
+
+
+
+	}
+
+
+	
 
 
 	return true;
@@ -867,6 +933,7 @@ bool VulkanBackend::check_facewithtwocuts(std::array<uint32_t, 3> face_vert_indi
 
 		bool duplicate_edges = (gMesh.dupedgePtr[face_vert_indicies[i]] != -1);
 		bool select_edges = (gMesh.selectorPtr[face_vert_indicies[i]] == 1);
+		bool done_edges = (gMesh.doneedgePtr[face_vert_indicies[i]] == 1);
 
 
 		std::cout << "line: " << face_vert_indicies[i] << " dup edge: " << gMesh.dupedgePtr[face_vert_indicies[i]] << " select: " << gMesh.selectorPtr[face_vert_indicies[i]] << std::endl;
@@ -874,7 +941,7 @@ bool VulkanBackend::check_facewithtwocuts(std::array<uint32_t, 3> face_vert_indi
 
 
 
-		if (!duplicate_edges || select_edges)
+		if (!duplicate_edges || select_edges || done_edges)
 		{
 			std::cout << "CUT EDGE line: " << face_vert_indicies[i] << std::endl;
 
@@ -924,6 +991,29 @@ std::array < uint32_t, 3> VulkanBackend::facewithtwocuts(std::array<uint32_t, 3>
 	return cut_edges;
 
 }
+
+uint32_t VulkanBackend::facewithtwocuts2(std::array<uint32_t, 3> face_vert_indicies)
+{
+
+	for (size_t i = 0; i < 3; i++)
+	{
+
+		bool duplicate_edges = (gMesh.dupedgePtr[face_vert_indicies[i]] != -1);
+		bool select_edges = (gMesh.selectorPtr[face_vert_indicies[i]] == 1);
+		bool done_edges = (gMesh.doneedgePtr[face_vert_indicies[i]] == 1);
+
+
+
+		if (!duplicate_edges || select_edges || done_edges)
+		{
+			std::cout << "CUT EDGE line: " << face_vert_indicies[i] << std::endl;
+
+			return face_vert_indicies[i];
+		}
+
+	}
+}
+
 
 
 glm::quat VulkanBackend::getrotatefacedown(glm::vec3 srcnormal) {
