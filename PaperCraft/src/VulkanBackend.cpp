@@ -1097,11 +1097,39 @@ void VulkanBackend::flattenmesh() {
 
 	//gMesh.VerticesCPU = transformedVertices;
 
-
+		display__vertexpos();
 	updatevertexbuffer();
 
 
 }
+
+
+void VulkanBackend::display__vertexpos() {
+
+	std::cout << "           display__vertexpos start " << std::endl;
+
+
+	for (size_t i = 0; i < gMesh.VerticesCPU.size(); i++)
+	{
+		std::cout << "vertex: " << i << " - Position: " << gMesh.VerticesCPU[i].pos.x << ", " << gMesh.VerticesCPU[i].pos.y << ", " << gMesh.VerticesCPU[i].pos.z << std::endl;
+
+
+
+	}
+
+
+}
+
+void VulkanBackend::set__vertexZpos0() {
+
+	for (size_t i = 0; i < gMesh.VerticesCPU.size(); i++)
+	{
+		gMesh.VerticesCPU[i].pos.z = 0.0f;
+	}
+
+
+}
+
 
 
 std::array<uint32_t, 3> VulkanBackend::faceindex2verts(uint32_t nextface) {
@@ -1508,11 +1536,11 @@ void VulkanBackend::buildImGui() {
 
 	}
 
-	if (ImGui::Button("proceed")) {
-		//iterate line picking algorythm
-
-		changenextline();
-
+	if (ImGui::Button("settle")) {
+		//set all z positions to 0, for end of flattening process
+		set__vertexZpos0();
+		updatevertexbuffer();
+		display__vertexpos();
 	}
 
 
@@ -1565,17 +1593,6 @@ void VulkanBackend::buildImGui() {
 }
 
 
-void VulkanBackend::changenextline() {
-
-
-
-
-
-
-
-
-
-}
 
 //single time command buffer helper functions
 

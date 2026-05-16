@@ -294,6 +294,9 @@ public:
 
 	std::vector<bool> VulkanBackend::recuur_stillverts(std::vector<bool>& stillverts, uint32_t currline);
 
+	void VulkanBackend::display__vertexpos();
+
+	void VulkanBackend::set__vertexZpos0();
 
 
 private:
