@@ -591,14 +591,462 @@ void VulkanBackend::initImGui() {
 	//ImGui_ImplVulkan_DestroyFontUploadObjects();
 
 }
+bool VulkanBackend::alldone() {
+
+
+	bool result = true;
+
+	for (size_t i = 0; i < gMesh.lineCount; i++)
+	{
+		std::cout << "------------- all done " << i << " " << gMesh.doneedgePtr[i] << std::endl;
+
+
+		if (gMesh.doneedgePtr[i] == 0 && gMesh.dupedgePtr[i] != -1)
+		{
+			result = false;
+		}
+
+	}
+
+	return result;
+}
+
+
+std::array < uint32_t, 3> Get__FaceVertIndicies_from_FaceIndex(uint32_t faceIndex) {
+	return { faceIndex * 3, faceIndex * 3 + 1, faceIndex * 3 + 2 };
+}
+
+std::array < uint32_t, 6> VulkanBackend::Get__FaceLineIndicies_from_FaceIndex(uint32_t faceIndex) {
+
+	return{ gMesh.lineIndicesCPU[faceIndex], gMesh.lineIndicesCPU[faceIndex+1], gMesh.lineIndicesCPU[faceIndex+2], gMesh.lineIndicesCPU[faceIndex+3], gMesh.lineIndicesCPU[faceIndex+4], gMesh.lineIndicesCPU[faceIndex+5] };
+}
+
+
+void VulkanBackend::display__done() {
+
+	std::cout << "- displaying done buffer" << std::endl;
+
+	for (size_t i = 0; i < gMesh.lineCount; i++)
+	{
+		std::cout << "line: " << i << " done: " << gMesh.doneedgePtr[i] << std::endl;
+	}
+
+}
+
+void VulkanBackend::display__duplicate() {
+
+	std::cout << "- displaying duplicate buffer" << std::endl;
+
+	for (size_t i = 0; i < gMesh.lineCount; i++)
+	{
+		std::cout << "line: " << i << " duplicate: " << gMesh.dupedgePtr[i] << std::endl;
+	}
+
+}
+
+void VulkanBackend::display__selector() {
+	std::cout << "- displaying selector buffer" << std::endl;
+
+	for (size_t i = 0; i < gMesh.lineCount; i++)
+	{
+		std::cout << "line: " << i << " selector: " << gMesh.selectorPtr[i] << std::endl;
+	}
+}
+
+
+void VulkanBackend::display__line_buffer_data() {
+	display__done();
+	display__duplicate();
+	display__selector();
+}
+
+
+
+
+void display__face_index(uint32_t face_index) {
+
+	std::cout << "- displaying face index: " << face_index << std::endl;
+
+}
+
+void display__face_vertex_indicies(std::array<uint32_t, 3> face_vertex_indicies) {
+
+	std::cout << "- displaying vertex indicies: " << face_vertex_indicies[0] << ", " << face_vertex_indicies[1] << ", " << face_vertex_indicies[2] << std::endl;
+
+}
+void VulkanBackend::display__face_vertex_normals(std::array<uint32_t, 3> face_vertex_indicies) {
+
+	glm::vec3 normal = gMesh.VerticesCPU[face_vertex_indicies[0]].normal; // all vertices of the face should have the same normal, so we can just take the first one
+
+	std::cout << "normal: " << normal.x << ", " << normal.y << ", " << normal.z << std::endl;
+
+
+}
+
+void display__face_line_indicies(std::array<uint32_t, 6> face_line_indicies) {
+
+	std::cout << "- displaying line indicies: " << face_line_indicies[0] << ", " << face_line_indicies[1] << ", " << face_line_indicies[2] << ", " << face_line_indicies[3] << ", " << face_line_indicies[4] << ", " << face_line_indicies[5] << std::endl;
+}
+
+
+void VulkanBackend::display__face_data(uint32_t face_index, std::array<uint32_t, 3> face_vertex_indicies, std::array<uint32_t, 6> face_line_indicies) {
+
+	display__face_index(face_index);
+	display__face_vertex_indicies(face_vertex_indicies);
+	display__face_line_indicies(face_line_indicies);
+	display__face_vertex_normals(face_vertex_indicies);
+
+}
+
+
+std::array<uint32_t, 3> VulkanBackend::Convert__FaceVertIndicies_2_SelectorBuffer(std::array<uint32_t, 3> face_vertex_indicies) {
+
+	return { gMesh.selectorPtr[face_vertex_indicies[0]], gMesh.selectorPtr[face_vertex_indicies[1]], gMesh.selectorPtr[face_vertex_indicies[2]] };
+}
+
+std::array<uint32_t, 3> VulkanBackend::Convert__FaceVertIndicies_2_DoneBuffer(std::array<uint32_t, 3> face_vertex_indicies) {
+
+	return { gMesh.doneedgePtr[face_vertex_indicies[0]], gMesh.doneedgePtr[face_vertex_indicies[1]], gMesh.doneedgePtr[face_vertex_indicies[2]] };
+}
+
+std::array<uint32_t, 3> VulkanBackend::Convert__FaceVertIndicies_2_DuplicateBuffer(std::array<uint32_t, 3> face_vertex_indicies) {
+
+	return { gMesh.dupedgePtr[face_vertex_indicies[0]], gMesh.dupedgePtr[face_vertex_indicies[1]], gMesh.dupedgePtr[face_vertex_indicies[2]] };
+}
+
+
+
+
+void VulkanBackend::display__face_selector(std::array<uint32_t, 3> face_vertex_indicies) {
+
+	std::cout << "- displaying selector indicies: " << gMesh.selectorPtr[face_vertex_indicies[0]] << ", " << gMesh.selectorPtr[face_vertex_indicies[1]] << ", " << gMesh.selectorPtr[face_vertex_indicies[2]] << std::endl;
+
+}
+void VulkanBackend::display__face_done(std::array<uint32_t, 3> face_vertex_indicies) {
+
+	std::cout << "- displaying done indicies: " << gMesh.doneedgePtr[face_vertex_indicies[0]] << ", " << gMesh.doneedgePtr[face_vertex_indicies[1]] << ", " << gMesh.doneedgePtr[face_vertex_indicies[2]] << std::endl;
+
+}
+void VulkanBackend::display__face_duplicate(std::array<uint32_t, 3> face_vertex_indicies) {
+
+	std::cout << "- displaying duplicate indicies: " << gMesh.dupedgePtr[face_vertex_indicies[0]] << ", " << gMesh.dupedgePtr[face_vertex_indicies[1]] << ", " << gMesh.dupedgePtr[face_vertex_indicies[2]] << std::endl;
+
+}
+
+void display__stillverts(std::vector<bool>& stillverts) {
+
+
+	for (size_t i = 0; i < stillverts.size(); i++)
+	{
+		std::cout << "- stillverts: num" << i << ", " << stillverts[i]<< std::endl;
+
+	}
+
+}
+
+void VulkanBackend::display__face_buffer_data(std::array<uint32_t, 3> face_vertex_indicies) {
+
+	display__face_selector(face_vertex_indicies);
+	display__face_done(face_vertex_indicies);
+	display__face_duplicate(face_vertex_indicies);
+
+}
+
+bool VulkanBackend::isdone(uint32_t line_index) {
+	return gMesh.doneedgePtr[line_index] == 1;
+}
+bool VulkanBackend::isedge(uint32_t line_index) {
+	return gMesh.dupedgePtr[line_index] == -1;
+}
+bool VulkanBackend::isselected(uint32_t line_index) {
+	return gMesh.selectorPtr[line_index] == 1;
+}
+uint32_t VulkanBackend::getdup(uint32_t line_index) {
+	return gMesh.dupedgePtr[line_index];
+}
+
+
+
+
+bool VulkanBackend::check__face_allLinesDoneorEdges(std::array<uint32_t, 3> face_vertex_indicies) {
+
+	for (size_t i = 0; i < 3; i++)
+	{
+		if (!isdone(face_vertex_indicies[i]) && !isedge(face_vertex_indicies[i]) && !isselected(face_vertex_indicies[i]))
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
+
+
+uint32_t VulkanBackend::check__face_numFoldLines(std::array<uint32_t, 3> face_vertex_indicies) {
+
+	uint32_t foldlines = 0;
+
+	for (size_t i = 0; i < 3; i++)
+	{
+		if (!isedge(face_vertex_indicies[i]) && !isselected(face_vertex_indicies[i]) && !isdone(face_vertex_indicies[i]))
+		{
+			foldlines++;
+		}
+
+	}
+
+	return foldlines;
+
+}
+
+
+//get the index (0,1,2) of the fold edge of the face, given that there is only one fold edge
+uint32_t VulkanBackend::get__face_FoldLine(std::array<uint32_t, 3> face_vertex_indicies) {
+
+	for (size_t i = 0; i < 3; i++)
+	{
+
+		if (!isedge(face_vertex_indicies[i]) && !isselected(face_vertex_indicies[i]) && !isdone(face_vertex_indicies[i])) {
+			return i;
+		}
+	}
+	std::cout << "------------------------------------------------------------------------------- get_foldnum_face error, no fold edge found" << std::endl;
+	return -1;
+
+
+}
+
+
+bool isnormal_down(glm::vec3 normal) {
+
+	std::cout << "normal: " << normal.x << ", " << normal.y << ", " << normal.z << std::endl;
+	
+	const float basicallyZero = 1e-6f;
+
+	if (std::fabs(normal.x) < basicallyZero)
+	{
+		normal.x = 0;
+	}
+
+	if (std::fabs(normal.y) < basicallyZero)
+	{ 
+		normal.y = 0;
+	}
+
+	if (std::fabs(normal.z) < basicallyZero)
+	{
+		normal.z = 0;
+	}
+
+	//std::cout << "normal: " << normal.x << ", " << normal.y << ", " << normal.z << std::endl;
+
+
+	return normal == glm::vec3{ 0, 0, -1 };
+
+}
+
+uint32_t VulkanBackend::get__dupeline(uint32_t fold_line, std::array<uint32_t, 3> face_vertex_indicies) {
+
+	uint32_t duplicate_line_index = gMesh.dupedgePtr[face_vertex_indicies[fold_line]];
+
+
+	return duplicate_line_index;
+
+}
+
+
+uint32_t VulkanBackend::get__nextface(uint32_t fold_line, std::array<uint32_t, 3> face_vertex_indicies) {
+
+	uint32_t duplicate_line_index = gMesh.dupedgePtr[face_vertex_indicies[fold_line]];
+
+	uint32_t next_face = std::floor(duplicate_line_index / 3);
+
+	return next_face;
+
+}
+
+
+//sometimes normals go very close to zero instead of too zero
+void VulkanBackend::fix__ALLnormalDrift() {
+
+	for (auto& v : gMesh.VerticesCPU)
+	{
+
+		const float basicallyZero = 1e-6f;
+
+		if (std::fabs(v.normal.x) < basicallyZero)
+		{
+			v.normal.x = 0;
+		}
+
+		if (std::fabs(v.normal.y) < basicallyZero)
+		{
+			v.normal.y = 0;
+		}
+
+		if (std::fabs(v.normal.z) < basicallyZero)
+		{
+			v.normal.z = 0;
+		}
+
+	}
+
+
+}
+
+
+std::vector<bool> VulkanBackend::recuur_stillverts(std::vector<bool>& stillverts, uint32_t face_index) {
+
+	std::cout << "stillverts recurring on face: " << face_index << std::endl;
+
+
+	std::array<uint32_t, 3> curr_face_vertex_indicies = Get__FaceVertIndicies_from_FaceIndex(face_index);
+
+
+	for (size_t i = 0; i < 3; i++)
+	{
+
+		if (isdone(curr_face_vertex_indicies[i]) && !stillverts[get__dupeline(i, curr_face_vertex_indicies)])
+		{
+			stillverts[curr_face_vertex_indicies[i]] = true;
+			stillverts = recuur_stillverts(stillverts, get__nextface(i, curr_face_vertex_indicies));
+		}
+
+		stillverts[curr_face_vertex_indicies[i]] = true;
+
+
+
+	}
+
+	return stillverts;
+
+}
+
+
+
+
+
+void VulkanBackend::rotate_firstStage(uint32_t face_index, std::vector<bool>& stillverts) {
+
+	fix__ALLnormalDrift();
+
+	int vertcount = gMesh.VerticesCPU.size();
+
+
+	std::array<uint32_t, 3> curr_face_vertex_indicies = Get__FaceVertIndicies_from_FaceIndex(face_index);
+	std::array<uint32_t, 6> curr_face_line_indicies = Get__FaceLineIndicies_from_FaceIndex(face_index);
+
+
+	std::cout << "--- start of current face" << std::endl;
+	display__face_data(face_index, curr_face_vertex_indicies, curr_face_line_indicies);
+	display__face_buffer_data(curr_face_vertex_indicies);
+	display__stillverts(stillverts);
+
+
+	//check if all lines of face are either done or an edge, if so skip to next face
+	if (!check__face_allLinesDoneorEdges(curr_face_vertex_indicies))
+	{
+		std::cout << " ALL FACES LOOP not done: " << std::endl;
+
+
+		//if curr face has one fold edge and two that are either done or an edge
+		if (check__face_numFoldLines(curr_face_vertex_indicies) == 1)
+		{
+
+			//0,1 or 2 for the three lines of the face
+			uint32_t fold_line = get__face_FoldLine(curr_face_vertex_indicies);
+
+			glm::vec3 curr_normal = gMesh.VerticesCPU[curr_face_vertex_indicies[0]].normal; // all vertices of the face should have the same normal, so we can just take the first one
+
+
+
+			//if face normal is not already pointing downwards
+			if (!isnormal_down(curr_normal))
+			{
+
+				//gets the quaternion that rotates the face normal to point downwards
+				glm::quat down_quaternion = getrotatefacedown(curr_normal);
+
+
+
+				//rotate whole mesh (includeing normals) so that face is flat on ground
+
+				std::cout << "- stage1 rotate" << std::endl;
+
+				for (auto& v : gMesh.VerticesCPU)
+				{
+					v.pos = down_quaternion * v.pos;
+					v.normal = glm::normalize(down_quaternion * v.normal);
+				}
+
+				fix__ALLnormalDrift();
+
+				//uint32_t currline_index = curr_face_vertex_indicies[fold_line];
+				uint32_t nextline_index = get__dupeline(fold_line, curr_face_vertex_indicies);
+				uint32_t nextface_index = get__nextface(fold_line, curr_face_vertex_indicies);
+
+				
+
+
+				for (size_t i = 0; i < 3; i++)
+				{
+
+					if (isdone(curr_face_vertex_indicies[i]) && !stillverts[get__dupeline(i, curr_face_vertex_indicies)])
+					{
+						std::cout << " starting stillverts recurr stage1 " << get__nextface(i, curr_face_vertex_indicies) << std::endl;
+						stillverts = recuur_stillverts(stillverts, get__nextface(i, curr_face_vertex_indicies));
+					}
+
+					stillverts[curr_face_vertex_indicies[i]] = true;
+
+					
+
+				}
+
+
+
+
+
+
+
+				glm::vec3 curr_normal = gMesh.VerticesCPU[curr_face_vertex_indicies[0]].normal; // all vertices of the face should have the same normal, so we can just take the first one
+
+
+				std::cout << "right before rotatenonstillverts normal: " << curr_normal.x << ", " << curr_normal.y << ", " << curr_normal.z << std::endl;
+
+				std::cout << "--- end of current face" << std::endl;
+				display__face_data(face_index, curr_face_vertex_indicies, curr_face_line_indicies);
+				display__face_buffer_data(curr_face_vertex_indicies);
+				display__stillverts(stillverts);
+
+
+				rotatenonstillverts(stillverts, nextface_index, nextline_index);
+
+			}
+
+		}
+
+
+
+	}
+	else
+	{
+		std::cout << " ALL FACES LOOP done: " << std::endl;
+		display__line_buffer_data();
+	}
+
+
+}
 
 
 
 void VulkanBackend::flattenmesh() {
 
 
-	std::cout << "- flatten mesh start" << std::endl;
+	std::cout << "------------------------------------------------------------------ flatten mesh start" << std::endl;
 
+	
 	//cut edge is any edge / selected / done face
 
 	//looop through faces
@@ -606,120 +1054,28 @@ void VulkanBackend::flattenmesh() {
 
 	//std::vector<MeshVertex> transformedVertices = gMesh.VerticesCPU;
 
-	int vertsize = gMesh.VerticesCPU.size();
+	int vertcount = gMesh.VerticesCPU.size();
+	int facecount = vertcount / 3;
+
+	//while (!alldone()) {
+	std::cout << "-- ALL FACES LOOP START: " << std::endl;
 
 
 
-	for (size_t facestartvert = 0; facestartvert < vertsize; facestartvert = facestartvert + 3)
-	{
-		std::vector<bool> stillverts(vertsize, false);
-
-
-		std::cout << " ALL FACES LOOP START: " << facestartvert << std::endl;
-
-		if (gMesh.doneedgePtr[facestartvert] != 1)
+		for (size_t face_index = 0; face_index < facecount; face_index++)
 		{
-			std::cout << " ALL FACES LOOP not done: " << std::endl;
 
+			std::cout << "-- ALL FACES LOOP NEXT: " << std::endl;
 
-			std::array<uint32_t, 3> face_vert_indicies = { facestartvert, facestartvert + 1, facestartvert + 2 };
+			std::vector<bool> stillverts(vertcount, false);
 
-			//if face has 2 cut edges (edge / done / selected)
-
-			std::cout << " pre check facestartvert: " << facestartvert << std::endl;
-
-
-			std::cout << " pre check face vert-indicie v0: " << face_vert_indicies[0] << ", vert-pos:  x:" << gMesh.VerticesCPU[face_vert_indicies[0]].pos.x << ", y:" << gMesh.VerticesCPU[face_vert_indicies[0]].pos.y << ", z:" << gMesh.VerticesCPU[face_vert_indicies[0]].pos.z << std::endl;
-			std::cout << " pre check face vert-indicie v1: " << face_vert_indicies[1] << ", vert-pos:  x:" << gMesh.VerticesCPU[face_vert_indicies[1]].pos.x << ", y:" << gMesh.VerticesCPU[face_vert_indicies[1]].pos.y << ", z:" << gMesh.VerticesCPU[face_vert_indicies[1]].pos.z << std::endl;
-			std::cout << " pre check face vert-indicie v2: " << face_vert_indicies[2] << ", vert-pos:  x:" << gMesh.VerticesCPU[face_vert_indicies[2]].pos.x << ", y:" << gMesh.VerticesCPU[face_vert_indicies[2]].pos.y << ", z:" << gMesh.VerticesCPU[face_vert_indicies[2]].pos.z << std::endl;
-
-
-
-
-			if (check_facewithtwocuts(face_vert_indicies)) {
-
-				std::array < uint32_t, 3> cut_edges = facewithtwocuts(face_vert_indicies);
-
-				std::cout << "cut edges " << cut_edges[0] << ", " << cut_edges[1] << ", " << cut_edges[2] << std::endl;
-
-
-
-
-				std::cout << "checking vert: " << face_vert_indicies[0] << std::endl;
-				std::cout << "pre check normal: " << gMesh.VerticesCPU[face_vert_indicies[0]].normal.x << ", " << gMesh.VerticesCPU[face_vert_indicies[0]].normal.y << ", " << gMesh.VerticesCPU[face_vert_indicies[0]].normal.z << std::endl;
-
-				//if face normal is not already pointing downwards
-				if (gMesh.VerticesCPU[face_vert_indicies[0]].normal != glm::vec3{ 0, 0, -1 }) {
-					std::cout << "pre rotate normal: " << gMesh.VerticesCPU[face_vert_indicies[0]].normal.x << ", " << gMesh.VerticesCPU[face_vert_indicies[0]].normal.y << ", " << gMesh.VerticesCPU[face_vert_indicies[0]].normal.z << std::endl;
-
-
-					//gets the quaternion that rotates the face normal to point downwards
-					glm::quat down_quaternion = getrotatefacedown(gMesh.VerticesCPU[face_vert_indicies[0]].normal);
-
-					std::cout << "down quaternion: " << down_quaternion.x << ", " << down_quaternion.y << ", " << down_quaternion.z << ", " << down_quaternion.w << std::endl;
-
-
-					//rotate whole mesh (includeing normals) so that face is flat on ground
-					for (auto& v : gMesh.VerticesCPU)
-					{
-						v.pos = down_quaternion * v.pos;
-						v.normal = glm::normalize(down_quaternion * v.normal);
-					}
-
-					std::cout << "transformed normal: " << gMesh.VerticesCPU[face_vert_indicies[0]].normal.x << ", " << gMesh.VerticesCPU[face_vert_indicies[0]].normal.y << ", " << gMesh.VerticesCPU[face_vert_indicies[0]].normal.z << std::endl;
-
-
-
-					uint32_t nextline;
-					uint32_t nextface;
-
-					
-
-					for (size_t i = 0; i < 3; i++)
-					{
-						// mark lines of face 1 as done
-						std::cout << " doneline: " << face_vert_indicies[i] << std::endl;
-						gMesh.doneedgePtr[face_vert_indicies[i]] = 1;
-
-						stillverts[face_vert_indicies[i]] = true;
-
-						//gets the next face that is connected to the non cut edge of the current face
-						if (cut_edges[i] == 0)
-						{
-							//floor should make it round down
-							
-							nextline = gMesh.dupedgePtr[face_vert_indicies[i]];
-
-							std::cout << " dup doneline: " << nextline << std::endl;
-							gMesh.doneedgePtr[nextline] = 1;
-
-							nextface = std::floor(nextline / 3);
-
-
-							std::cout << "curr face: " << std::floor(face_vert_indicies[i] / 3) << std::endl;
-							std::cout << "next face: " << nextface << std::endl;
-
-						}
-
-					}
-					
-
-					rotatenonstillverts(stillverts, nextface, nextline);
-
-				}
-
-			}
-
+			rotate_firstStage(face_index, stillverts);
+			
 
 
 		}
-		else
-		{
-			std::cout << " ALL FACES LOOP done: " << std::endl;
-		}
-	}
 
-
+	//}
 	
 	//get connected line and then face of non cut edge
 	//rotate whole mesh except for done ones along the axis of that line until the face 2 is also flat on xp plane
@@ -735,18 +1091,6 @@ void VulkanBackend::flattenmesh() {
 
 	//}
 
-
-
-
-	std::cout << "LIST OF DONES" << std::endl;
-
-	for (size_t done_lines = 0; done_lines < gMesh.lineCount; done_lines++)
-	{
-		
-		std::cout << "line: "<< done_lines << " done: " << gMesh.doneedgePtr[done_lines] << std::endl;
-
-
-	}
 
 
 
@@ -772,7 +1116,7 @@ std::array<uint32_t, 3> VulkanBackend::faceindex2verts(uint32_t nextface) {
 	return { nextface * 3, nextface * 3 + 1, nextface * 3 + 2 };
 }
 
-std::array<uint32_t, 2> VulkanBackend::lineindex2verts(uint32_t nextline) {
+std::array<uint32_t, 2> VulkanBackend::Get__lineVertexIndicies_from_currline(uint32_t nextline) {
 	std::cout << "lineindex2verts start " << std::endl;
 
 	std::cout << "lineindex2verts 0: " << gMesh.lineIndicesCPU[nextline * 2] << std::endl;
@@ -784,33 +1128,42 @@ std::array<uint32_t, 2> VulkanBackend::lineindex2verts(uint32_t nextline) {
 
 
 
-bool VulkanBackend::rotatenonstillverts(std::vector<bool> stillverts, uint32_t nextface, uint32_t rotateline) {
-
-	std::cout << "rotatenonstillverts start " << std::endl;
+bool VulkanBackend::rotatenonstillverts(std::vector<bool> stillverts, uint32_t currface, uint32_t currline) {
 
 
-	std::array<uint32_t, 3> face_vert_indicies = faceindex2verts(nextface);
-	std::array<uint32_t, 2> line_vert_indicies = lineindex2verts(rotateline);
+	
 
-	std::cout << "lineindex2verts end " << std::endl;
-
-
-	std::cout << " next face vert-indicie v0: " << face_vert_indicies[0] << ", vert-pos:  x:" << gMesh.VerticesCPU[face_vert_indicies[0]].pos.x << ", y:" << gMesh.VerticesCPU[face_vert_indicies[0]].pos.y << ", z:" << gMesh.VerticesCPU[face_vert_indicies[0]].pos.z << std::endl;
-	std::cout << " next face vert-indicie v1: " << face_vert_indicies[1] << ", vert-pos:  x:" << gMesh.VerticesCPU[face_vert_indicies[1]].pos.x << ", y:" << gMesh.VerticesCPU[face_vert_indicies[1]].pos.y << ", z:" << gMesh.VerticesCPU[face_vert_indicies[1]].pos.z << std::endl;
-	std::cout << " next face vert-indicie v2: " << face_vert_indicies[2] << ", vert-pos:  x:" << gMesh.VerticesCPU[face_vert_indicies[2]].pos.x << ", y:" << gMesh.VerticesCPU[face_vert_indicies[2]].pos.y << ", z:" << gMesh.VerticesCPU[face_vert_indicies[2]].pos.z << std::endl;
+	std::cout << "           rotatenonstillverts start " << std::endl;
 
 
-	std::cout << " rotaty line-indicie v0: " << line_vert_indicies[0] << ", line-pos: x:" << gMesh.VerticesCPU[line_vert_indicies[0]].pos.x << ", y:" << gMesh.VerticesCPU[line_vert_indicies[0]].pos.y << ", z:" << gMesh.VerticesCPU[line_vert_indicies[0]].pos.z << std::endl;
-	std::cout << " rotaty line-indicie v1: " << line_vert_indicies[1] << ", line-pos: x:" << gMesh.VerticesCPU[line_vert_indicies[1]].pos.x << ", y:" << gMesh.VerticesCPU[line_vert_indicies[1]].pos.y << ", z:" << gMesh.VerticesCPU[line_vert_indicies[1]].pos.z << std::endl;
-
-	//TODO: get good quat
-	glm::quat rotate_quaternion = getrotatealongline(gMesh.VerticesCPU[face_vert_indicies[0]].normal, line_vert_indicies);
+	std::array<uint32_t, 3> curr_face_vertex_indicies = Get__FaceVertIndicies_from_FaceIndex(currface);
+	std::array<uint32_t, 6> curr_face_line_indicies = Get__FaceLineIndicies_from_FaceIndex(currface);
 
 
-	std::cout << " rotaty quaternion: x: " << rotate_quaternion.x << ", y: " << rotate_quaternion.y << ", z: " << rotate_quaternion.z << std::endl;
+	std::cout << "--- start of current face" << std::endl;
+	display__face_data(currface, curr_face_vertex_indicies, curr_face_line_indicies);
+	display__face_buffer_data(curr_face_vertex_indicies);
+	display__stillverts(stillverts);
 
 
-	//glm::quat down_quaternion = getrotatefacedown(gMesh.VerticesCPU[face_vert_indicies[0]].normal);
+
+	glm::vec3 curr_normal = gMesh.VerticesCPU[curr_face_vertex_indicies[0]].normal; // all vertices of the face should have the same normal, so we can just take the first one
+
+
+	if (!isnormal_down(curr_normal))
+	{
+		std::cout << " normal not faceing down, rotating this face " << std::endl;
+
+
+
+	std::array<uint32_t, 2> line_vert_indicies = Get__lineVertexIndicies_from_currline(currline);
+
+
+
+	glm::quat rotate_quaternion = Get__rotation_normal_to_Down(gMesh.VerticesCPU[curr_face_vertex_indicies[0]].normal, line_vert_indicies);
+
+
+	glm::vec3 midposition = Get__line_midpoint(line_vert_indicies);
 
 
 
@@ -820,60 +1173,78 @@ bool VulkanBackend::rotatenonstillverts(std::vector<bool> stillverts, uint32_t n
 		{
 			std::cout << " rotating vert: " << i << std::endl;
 
-			gMesh.VerticesCPU[i].pos = rotate_quaternion * gMesh.VerticesCPU[i].pos;
+			//glm::vec3 P = gMesh.VerticesCPU[i].pos;
+
+			gMesh.VerticesCPU[i].pos = glm::translate(glm::mat4(1.0f), midposition) * glm::mat4_cast(rotate_quaternion) * glm::translate(glm::mat4(1.0f), -midposition) * glm::vec4(gMesh.VerticesCPU[i].pos, 1.0f);
 			gMesh.VerticesCPU[i].normal = glm::normalize(rotate_quaternion * gMesh.VerticesCPU[i].normal);
 
 		}
 	}
 
-	
 
 
-	//add verts of the new face to stillverts
-	 
-	stillverts[face_vert_indicies[0]] = true;
-	stillverts[face_vert_indicies[1]] = true;
-	stillverts[face_vert_indicies[2]] = true;
-
-	
-	gMesh.doneedgePtr[rotateline] = 1;
-	gMesh.doneedgePtr[gMesh.dupedgePtr[rotateline]] = 1;
+	fix__ALLnormalDrift();
 
 
-	std::cout << " - pre reccur check: " << std::endl;
 
-
-	//recurse if there is a rotate line on the next face (theres 2 edges)
-
-	//updatevertexbuffer();
-
-	if (check_facewithtwocuts(face_vert_indicies))
+	}
+	else
 	{
+		std::cout << " normal already faceing down, skipping too next face " << std::endl;
+
+	}
+
+
+	//set done lines to done
+	gMesh.doneedgePtr[currline] = 1;
+	gMesh.doneedgePtr[gMesh.dupedgePtr[currline]] = 1;
+
+
+	std::cout << " doing stillverts " << std::endl;
+
+	//set stillverts to true
+	for (size_t i = 0; i < 3; i++)
+	{
+
+
+		if (isdone(curr_face_vertex_indicies[i]) && !stillverts[get__dupeline(i, curr_face_vertex_indicies)])
+		{
+			std::cout << " starting stillverts recurr " << get__nextface(i, curr_face_vertex_indicies) << std::endl;
+			stillverts = recuur_stillverts(stillverts, get__nextface(i, curr_face_vertex_indicies));
+		}
+
+		stillverts[curr_face_vertex_indicies[i]] = true;
+
+
+
+	}
+
+
+	std::cout << "--- end of current face" << std::endl;
+	display__face_data(currface, curr_face_vertex_indicies, curr_face_line_indicies);
+	display__face_buffer_data(curr_face_vertex_indicies);
+	display__stillverts(stillverts);
+
+	if (check__face_numFoldLines(curr_face_vertex_indicies) == 1){
+
+
 		std::cout << " - reccur check success " << std::endl;
 
+		uint32_t fold_line = get__face_FoldLine(curr_face_vertex_indicies);
+
+
+		uint32_t nextline_index = get__dupeline(fold_line, curr_face_vertex_indicies);
+		uint32_t nextface_index = get__nextface(fold_line, curr_face_vertex_indicies);
 
 
 
-		std::cout << "pre cutedge " << std::endl;
+		std::cout << "    rotatenonstillverts loop " << std::endl;
 
 
-		uint32_t cut_edge = facewithtwocuts2(face_vert_indicies);
-		std::cout << "cut edge " << cut_edge << std::endl;
 
 
-		std::cout << "pre linerotate " << std::endl;
 
-
-		uint32_t linetorotate = gMesh.duplicate_edgesCPU[cut_edge];
-
-		std::cout << "pre newface " << std::endl;
-
-
-		uint32_t newface = std::floor(linetorotate / 3);
-
-		std::cout << "pre rotate " << std::endl;
-
-		rotatenonstillverts(stillverts, newface, linetorotate);
+		rotatenonstillverts(stillverts, nextface_index, nextline_index);
 
 
 
@@ -882,19 +1253,26 @@ bool VulkanBackend::rotatenonstillverts(std::vector<bool> stillverts, uint32_t n
 
 	
 
-
+	std::cout << "           rotatenonstillverts end " << std::endl;
 	return true;
 }
 
 
+glm::vec3 VulkanBackend::Get__line_midpoint(std::array<uint32_t, 2> line_vert_indicies) {
 
-glm::quat VulkanBackend::getrotatealongline(glm::vec3 srcnormal, std::array<uint32_t, 2> lineVertIndices) {
+	glm::vec3 P1 = gMesh.VerticesCPU[line_vert_indicies[0]].pos;
+	glm::vec3 P2 = gMesh.VerticesCPU[line_vert_indicies[1]].pos;
+
+	return ((P1 + P2) / 2.0f);
+
+}
+
+
+
+glm::quat VulkanBackend::Get__rotation_normal_to_Down(glm::vec3 srcnormal, std::array<uint32_t, 2> lineVertIndices) {
 
 
 	glm::vec3 downnormal = { 0, 0, -1 };
-
-
-
 
 
 	glm::vec3 axis = normalize(gMesh.VerticesCPU[lineVertIndices[0]].pos - gMesh.VerticesCPU[lineVertIndices[1]].pos);
@@ -917,6 +1295,49 @@ glm::quat VulkanBackend::getrotatealongline(glm::vec3 srcnormal, std::array<uint
 
 
 	return glm::angleAxis(angle, axis);
+
+
+}
+
+
+bool VulkanBackend::check_facealldone(std::array<uint32_t, 3> face_vert_indicies) {
+
+	std::cout << "face_vert_indicies: " << face_vert_indicies[0] << ", " << face_vert_indicies[1] << ", " << face_vert_indicies[2] << std::endl;
+
+	uint32_t dones = 0;
+	for (size_t i = 0; i < 3; i++)
+	{
+
+
+		bool done_edges = (gMesh.doneedgePtr[face_vert_indicies[i]] == 1);
+
+
+		std::cout << "line: " << face_vert_indicies[i] << " dup edge: " << gMesh.dupedgePtr[face_vert_indicies[i]] << " select: " << gMesh.selectorPtr[face_vert_indicies[i]] << std::endl;
+
+
+
+
+		if (done_edges)
+		{
+			std::cout << "CUT EDGE line: " << face_vert_indicies[i] << std::endl;
+
+			dones++;
+		}
+	}
+
+
+	std::cout << "DONE: " << dones << std::endl;
+
+	if (dones == 3)
+	{
+		std::cout << "ALL DONE: " << std::endl;
+		return true;
+	}
+	else {
+
+		std::cout << "NOT ALL DONE: " << std::endl;
+		return false;
+	}
 
 
 }
@@ -1004,7 +1425,7 @@ uint32_t VulkanBackend::facewithtwocuts2(std::array<uint32_t, 3> face_vert_indic
 
 
 
-		if (!duplicate_edges || select_edges || done_edges)
+		if (duplicate_edges || select_edges || done_edges)
 		{
 			std::cout << "CUT EDGE line: " << face_vert_indicies[i] << std::endl;
 

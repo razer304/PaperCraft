@@ -162,7 +162,6 @@ public:
 		VkBuffer vertexBuffer{};
 		VkDeviceMemory vertexMemory{};
 
-
 		//index buffers
 		VkBuffer fillindexBuffer{};
 		VkDeviceMemory fillindexMemory{};
@@ -215,8 +214,43 @@ public:
 	};
 
 
+	void VulkanBackend::display__done();
+	void VulkanBackend::display__duplicate();
+	void VulkanBackend::display__selector();
+
+	void VulkanBackend::display__face_selector(std::array<uint32_t, 3> face_vertex_indicies);
+	void VulkanBackend::display__face_done(std::array<uint32_t, 3> face_vertex_indicies);
+	void VulkanBackend::display__face_duplicate(std::array<uint32_t, 3> face_vertex_indicies);
+
+	void VulkanBackend::display__face_buffer_data(std::array<uint32_t, 3> face_vertex_indicies);
+
+	bool VulkanBackend::check__face_allLinesDoneorEdges(std::array<uint32_t, 3> face_vertex_indicies);
+
+	bool VulkanBackend::isdone(uint32_t line_index);
+	bool VulkanBackend::isedge(uint32_t line_index);
+	bool VulkanBackend::isselected(uint32_t line_index);
+	uint32_t VulkanBackend::getdup(uint32_t line_index);
+
+	void VulkanBackend::display__line_buffer_data();
+
+	uint32_t VulkanBackend::check__face_numFoldLines(std::array<uint32_t, 3> curr_face_vertex_indicies);
+
+	uint32_t VulkanBackend::get__face_FoldLine(std::array<uint32_t, 3> face_vertex_indicies);
+
+	void VulkanBackend::rotate_firstStage(uint32_t faceindex, std::vector<bool>& stillverts);
+
+
+	uint32_t VulkanBackend::get__dupeline(uint32_t fold_line, std::array<uint32_t, 3> face_vertex_indicies);
+	uint32_t VulkanBackend::get__nextface(uint32_t fold_line, std::array<uint32_t, 3> face_vertex_indicies);
+
+	std::array < uint32_t, 6> VulkanBackend::Get__FaceLineIndicies_from_FaceIndex(uint32_t faceIndex);
+
+	std::array<uint32_t, 3> VulkanBackend::Convert__FaceVertIndicies_2_SelectorBuffer(std::array<uint32_t, 3> face_vertex_indicies);
+	std::array<uint32_t, 3> VulkanBackend::Convert__FaceVertIndicies_2_DuplicateBuffer(std::array<uint32_t, 3> face_vertex_indicies);
+	std::array<uint32_t, 3> VulkanBackend::Convert__FaceVertIndicies_2_DoneBuffer(std::array<uint32_t, 3> face_vertex_indicies);
 
 	
+
 
 	Mesh gMesh;
 
@@ -239,14 +273,27 @@ public:
 
 	uint32_t VulkanBackend::facewithtwocuts2(std::array<uint32_t, 3> face_vert_indicies);
 
+	bool VulkanBackend::check_facealldone(std::array<uint32_t, 3> face_vert_indicies);
+
+	void VulkanBackend::display__face_data(uint32_t face_index, std::array<uint32_t, 3> face_vertex_indicies, std::array<uint32_t, 6> face_line_indicies);
 
 	glm::quat VulkanBackend::getrotatefacedown(glm::vec3 srcnormal);
 
-	bool VulkanBackend::rotatenonstillverts(std::vector<bool> stilllines, uint32_t face_vert_indicies, uint32_t nextline);
+	bool VulkanBackend::rotatenonstillverts(std::vector<bool> stilllines, uint32_t face_vert_indicies, uint32_t currline);
 
+	void VulkanBackend::display__face_vertex_normals(std::array<uint32_t, 3> face_vertex_indicies);
+
+	glm::vec3 VulkanBackend::Get__line_midpoint(std::array<uint32_t, 2> line_vert_indicies);
+
+	bool VulkanBackend::alldone();
+
+	void VulkanBackend::fix__ALLnormalDrift();
 
 	std::array<uint32_t, 3> VulkanBackend::faceindex2verts(uint32_t nextface);
-	std::array<uint32_t, 2> VulkanBackend::lineindex2verts(uint32_t nextline);
+	std::array<uint32_t, 2> VulkanBackend::Get__lineVertexIndicies_from_currline(uint32_t nextline);
+
+	std::vector<bool> VulkanBackend::recuur_stillverts(std::vector<bool>& stillverts, uint32_t currline);
+
 
 
 private:
@@ -424,7 +471,7 @@ private:
 
 	void createDescriptorSets();
 
-	glm::quat getrotatealongline(glm::vec3 srcnormal, std::array<uint32_t, 2> lineVertIndices);
+	glm::quat Get__rotation_normal_to_Down(glm::vec3 srcnormal, std::array<uint32_t, 2> lineVertIndices);
 
 
 	VkDebugUtilsMessengerEXT debugMessenger;
