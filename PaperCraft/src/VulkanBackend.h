@@ -45,6 +45,7 @@
 
 
 
+
 class VulkanBackend {
 public:
 
@@ -213,6 +214,11 @@ public:
 
 	};
 
+	struct Vertex2D {
+		float x, y;
+
+	};
+
 
 	void VulkanBackend::display__done();
 	void VulkanBackend::display__duplicate();
@@ -297,6 +303,11 @@ public:
 	void VulkanBackend::display__vertexpos();
 
 	void VulkanBackend::set__vertexZpos0();
+
+
+	void VulkanBackend::SaveImage();
+
+	std::array<uint32_t, 4> VulkanBackend::get__vertex_extremes();
 
 
 private:

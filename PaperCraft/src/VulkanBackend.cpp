@@ -3,6 +3,10 @@
 #include "inputhandler.h"
 #include <glm/gtx/quaternion.hpp>
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <stb_image_write.h>
+
+
 
 void VulkanBackend::runVulkanBackend() {
 	if (enableValidationLayers) {
@@ -1543,6 +1547,18 @@ void VulkanBackend::buildImGui() {
 		display__vertexpos();
 	}
 
+	if (ImGui::Button("saveImage")) {
+		//saves as an image
+
+
+		SaveImage();
+
+
+
+
+
+	}
+
 
 
 	// Display selected edge info
@@ -1591,6 +1607,189 @@ void VulkanBackend::buildImGui() {
 
 	ImGui::Render();
 }
+
+void draw_line(unsigned char* pixels, int width, int height, int channels, int x0, int y0, int x1, int y1) {
+	int dx = abs(x1 - x0);
+	int dy = abs(y1 - y0);
+	int sx = (x0 < x1) ? 1 : -1;
+	int sy = (y0 < y1) ? 1 : -1;
+	int err = dx - dy;
+
+	while (1) {
+		// Only draw if the point is within the image bounds
+		if (x0 >= 0 && x0 < width && y0 >= 0 && y0 < height) {
+			// Calculate 1D index for flat pixel array
+			int index = (y0 * width + x0) * channels;
+
+			pixels[index + 0] = 0;
+		}
+
+		if (x0 == x1 && y0 == y1) break;
+
+		int e2 = 2 * err;
+		if (e2 > -dy) { err -= dy; x0 += sx; }
+		if (e2 < dx) { err += dx; y0 += sy; }
+	}
+}
+
+void VulkanBackend::SaveImage() {
+
+
+	std::vector<Vertex2D> vertex2D(gMesh.VerticesCPU.size());
+
+	float max_x = FLT_MIN;
+	float min_x = FLT_MAX;
+	float max_y = FLT_MIN;
+	float min_y = FLT_MAX;
+
+	int width = 100;
+	int height = 100;
+	int channels = 1; // Grayscale
+
+	float translate_x = 0.0f;
+	float translate_y = 0.0f;
+
+	float scale_x = 1.0f;
+	float scale_y = 1.0f;
+
+	float scale = 1.0f;
+
+	// Create a pixel buffer (width * height * channels)
+	std::vector<unsigned char> pixels(width * height * channels, 255);
+
+
+	for (size_t vertex_index = 0; vertex_index < gMesh.VerticesCPU.size(); vertex_index++) {
+
+		
+		vertex2D[vertex_index].x = gMesh.VerticesCPU[vertex_index].pos.x;
+		vertex2D[vertex_index].y = gMesh.VerticesCPU[vertex_index].pos.y;
+
+
+		max_x = std::max(max_x, vertex2D[vertex_index].x);
+		min_x = std::min(min_x, vertex2D[vertex_index].x);
+		max_y = std::max(max_y, vertex2D[vertex_index].y);
+		min_y = std::min(min_y, vertex2D[vertex_index].y);
+
+	}
+
+	std::cout << "extremes: x: min: " << min_x << ", max:  " << max_x << ", y: min:" << min_y << ", max: " << max_y << std::endl;
+
+
+
+
+	if (min_x < 0) {
+
+		translate_x = -min_x;
+
+	}
+	if (min_y < 0) {
+	
+		translate_y = -min_y;
+	}
+
+	max_x = max_x + translate_x;
+	min_x = min_x + translate_x;
+	max_y = max_y + translate_y;
+	min_y = min_y + translate_y;
+
+	std::cout << "trans extremes: x: min: " << min_x << ", max:  " << max_x << ", y: min:" << min_y << ", max: " << max_y << std::endl;
+
+
+
+
+	if (max_x > width) {
+		scale_x = static_cast<float>(width) / (max_x - min_x);
+
+		if (max_y > height) {
+			scale_y = static_cast<float>(height) / (max_y - min_y);
+			
+		}
+		scale = std::min(scale_x, scale_y);
+		std::cout << "scale smaller: " << scale << std::endl;
+
+	}
+
+
+
+	if (max_y < height - (height / 10) && max_x < width - (width / 10)) {
+
+		scale_x = (1/max_x * (width-1));
+		scale_y = (1/max_y * (width-1));
+
+
+		scale = std::min(scale_x, scale_y);
+
+
+		std::cout << "scale x: " << scale_x << std::endl;
+		std::cout << "scale y: " << scale_y << std::endl;
+
+
+		std::cout << "scale bigger: " << scale << std::endl;
+
+	}
+
+
+
+	std::cout << "translate: " << translate_x << ", " << translate_y << std::endl;
+
+	std::cout << "scaled min: " << min_x * scale << ", " << min_y * scale << std::endl;
+	std::cout << "scaled max: " << max_x * scale << ", " << max_y * scale << std::endl;
+
+
+
+	for (size_t line_index = 0; line_index < gMesh.lineCount; line_index++)
+	{
+		
+		float x0 = vertex2D[gMesh.lineIndicesCPU[line_index * 2 + 0]].x;
+		float y0 = vertex2D[gMesh.lineIndicesCPU[line_index * 2 + 0]].y;
+		float x1 = vertex2D[gMesh.lineIndicesCPU[line_index * 2 + 1]].x;
+		float y1 = vertex2D[gMesh.lineIndicesCPU[line_index * 2 + 1]].y;
+
+		x0 = x0 + translate_x;
+		y0 = y0 + translate_y;
+		x1 = x1 + translate_x;
+		y1 = y1 + translate_y;
+
+
+		x0 = x0 * scale;
+		y0 = y0 * scale;
+		x1 = x1 * scale;
+		y1 = y1 * scale;
+
+
+		draw_line(pixels.data(), width, height, channels, x0, y0, x1, y1);
+
+
+	}
+
+	
+
+
+
+
+
+
+
+
+	/* this is for colour
+	for (int i = 0; i < width * height; ++i) {
+		pixels[i * 3 + 0] = 255; // Red
+		pixels[i * 3 + 1] = 0;   // Green
+		pixels[i * 3 + 2] = 0;   // Blue
+	}
+	*/
+
+
+
+	// Save the image
+	stbi_write_png("bloops.png", width, height, channels, pixels.data(), width * channels);
+
+
+
+
+
+}
+
 
 
 
