@@ -320,7 +320,8 @@ std::array<uint32_t, 2> VulkanBackend::pickEdge(double mouseX, double mouseY) {
 
 	float closestDist = 1e9f;
 
-	for (uint32_t i = 0; i < gMesh.lineindexCount; i += 3) {
+	//for (uint32_t i = 0; i < gMesh.lineindexCount; i += 3) {
+	for (uint32_t i = 0; i < gMesh.lineIndicesCPU.size(); i += 3) {
 		uint32_t i0 = gMesh.lineIndicesCPU[i + 0];
 		uint32_t i1 = gMesh.lineIndicesCPU[i + 1];
 		uint32_t i2 = gMesh.lineIndicesCPU[i + 2];
@@ -600,7 +601,8 @@ bool VulkanBackend::alldone() {
 
 	bool result = true;
 
-	for (size_t i = 0; i < gMesh.lineCount; i++)
+	//for (size_t i = 0; i < gMesh.lineIndicesCPU.size() / 2); i++)
+	for (size_t i = 0; i < (gMesh.lineIndicesCPU.size() / 2); i++)
 	{
 		std::cout << "------------- all done " << i << " " << gMesh.doneedgePtr[i] << std::endl;
 
@@ -630,7 +632,7 @@ void VulkanBackend::display__done() {
 
 	std::cout << "- displaying done buffer" << std::endl;
 
-	for (size_t i = 0; i < gMesh.lineCount; i++)
+	for (size_t i = 0; i < (gMesh.lineIndicesCPU.size() / 2); i++)
 	{
 		std::cout << "line: " << i << " done: " << gMesh.doneedgePtr[i] << std::endl;
 	}
@@ -641,7 +643,7 @@ void VulkanBackend::display__duplicate() {
 
 	std::cout << "- displaying duplicate buffer" << std::endl;
 
-	for (size_t i = 0; i < gMesh.lineCount; i++)
+	for (size_t i = 0; i < (gMesh.lineIndicesCPU.size() / 2); i++)
 	{
 		std::cout << "line: " << i << " duplicate: " << gMesh.dupedgePtr[i] << std::endl;
 	}
@@ -651,7 +653,7 @@ void VulkanBackend::display__duplicate() {
 void VulkanBackend::display__selector() {
 	std::cout << "- displaying selector buffer" << std::endl;
 
-	for (size_t i = 0; i < gMesh.lineCount; i++)
+	for (size_t i = 0; i < (gMesh.lineIndicesCPU.size() / 2); i++)
 	{
 		std::cout << "line: " << i << " selector: " << gMesh.selectorPtr[i] << std::endl;
 	}
@@ -1526,7 +1528,7 @@ void VulkanBackend::buildImGui() {
 
 			createDescriptorSets();
 
-			VkDeviceSize selectorSize = (gMesh.lineCount) * sizeof(uint32_t);
+			VkDeviceSize selectorSize = (gMesh.lineIndicesCPU.size() / 2) * sizeof(uint32_t);
 			updateSelectorDescriptors(selectorSize);
 
 		}
@@ -1570,7 +1572,7 @@ void VulkanBackend::buildImGui() {
 	//std::cout << "gui thingy" << std::endl;
 	//std::cout << "   " << std::endl;
 
-	for (size_t i = 0; i < gMesh.lineCount; i++)
+	for (size_t i = 0; i < (gMesh.lineIndicesCPU.size() / 2); i++)
 	{
 		bool selected = (gMesh.selectorPtr[i] == 1);
 		bool edge = (gMesh.dupedgePtr[i] == -1);
@@ -1737,7 +1739,7 @@ void VulkanBackend::SaveImage() {
 
 
 
-	for (size_t line_index = 0; line_index < gMesh.lineCount; line_index++)
+	for (size_t line_index = 0; line_index < (gMesh.lineIndicesCPU.size() / 2); line_index++)
 	{
 		
 		float x0 = vertex2D[gMesh.lineIndicesCPU[line_index * 2 + 0]].x;
@@ -1890,7 +1892,7 @@ VulkanBackend::Mesh VulkanBackend::loadMesh(const char* path) {
 
 
 	if (enableValidationLayers) {
-		std::cout << "selector count: " << result.lineCount << std::endl;
+		std::cout << "selector count: " << (result.lineIndicesCPU.size() / 2) << std::endl;
 		//VK_NULL_HANDLE
 		if (result.SelectorStorageBuffer == NULL)
 		{
@@ -2059,7 +2061,7 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 		void VulkanBackend::createVertexBuffer(Mesh & result, aiMesh * mesh) {
 
 			if (enableValidationLayers) {
-				std::cout << "- createVertexBuffer " << std::endl;
+				std::cout << "- createVertexBuffer -------------------------------------------" << std::endl;
 			}
 
 
@@ -2095,11 +2097,13 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 						mesh->mNormals[idx].y,
 						mesh->mNormals[idx].z);
 
+
+					//replaced!!
 					// Assign barycentrics based on j (0,1,2) 
-					if (j == 0)
-						v.bary = glm::vec3(1, 0, 0);
-					else if (j == 1) v.bary = glm::vec3(0, 1, 0);
-					else v.bary = glm::vec3(0, 0, 1);
+					//if (j == 0)
+						//v.bary = glm::vec3(1, 0, 0);
+					//else if (j == 1) v.bary = glm::vec3(0, 1, 0);
+					//else v.bary = glm::vec3(0, 0, 1);
 
 
 					vertices.push_back(v);
@@ -2160,14 +2164,14 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 			result.duplicate_edgesCPU = duplicate_edges;
 
 
-			result.fillindexCount = static_cast<uint32_t>(fillindices.size());
-			result.lineindexCount = static_cast<uint32_t>(lineindices.size());
-			result.lineCount = static_cast<uint32_t>(lineindices.size() / 2);
+			//result.fillindexCount = static_cast<uint32_t>(fillindices.size());
+			//result.lineIndicesCPU.size() = static_cast<uint32_t>(lineindices.size());
+			//result.lineCount = static_cast<uint32_t>(lineindices.size() / 2);
 
 
 
-			std::cout << "line indices size: " << lineindices.size() << std::endl;
-			std::cout << "line indices count: " << result.lineCount << std::endl;
+			std::cout << "line indices size: " << lineindices.size() << std::endl; //36
+			//std::cout << "line indices count: " << result.lineCount << std::endl; //18
 
 
 
@@ -2355,7 +2359,7 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 			VkDeviceSize lindexSize = lineindices.size() * sizeof(uint32_t);
 
 			//std::cout << "line indices size: " << lineindices.size() << std::endl;
-			//result.lineindexCount = static_cast<uint32_t>(lineindices.size());
+			//result.lineIndicesCPU.size() = static_cast<uint32_t>(lineindices.size());
 
 
 			//unjoined index buffer creatign
@@ -2403,7 +2407,7 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 		void VulkanBackend::selectorbuffer(Mesh & result) {
 
-			std::vector<uint32_t> selector(result.lineCount, 0);
+			std::vector<uint32_t> selector((result.lineIndicesCPU.size() / 2), 0);
 
 
 			VkDeviceSize selectorSize = selector.size() * sizeof(uint32_t);
@@ -2438,7 +2442,7 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 
 			std::cout << "selector size: " << selectorSize << std::endl;
-			std::cout << "selector count: " << result.lineCount << std::endl;
+			std::cout << "selector count: " << (result.lineIndicesCPU.size() / 2) << std::endl;
 
 			//memcpy(result.selectorPtr, testselectorValues, sizeof(testselectorValues));
 			memcpy(result.selectorPtr, selector.data(), selectorSize);
@@ -2446,7 +2450,7 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 			check = static_cast<uint32_t*>(result.selectorPtr);
 
 
-			for (size_t i = 0; i < result.lineCount; i++)
+			for (size_t i = 0; i < (result.lineIndicesCPU.size() / 2); i++)
 			{
 				std::cout << "selector = " << check[i] << std::endl;
 
@@ -2464,7 +2468,7 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 		
 		void VulkanBackend::doneedgesbuffer(Mesh& result) {
 
-			std::vector<uint32_t> dones(result.lineCount, 0);
+			std::vector<uint32_t> dones((result.lineIndicesCPU.size() / 2), 0);
 
 
 			VkDeviceSize donesSize = dones.size() * sizeof(uint32_t);
@@ -2499,7 +2503,7 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 
 			std::cout << "done size: " << donesSize << std::endl;
-			std::cout << "done count: " << result.lineCount << std::endl;
+			std::cout << "done count: " << (result.lineIndicesCPU.size() / 2) << std::endl;
 
 			//memcpy(result.selectorPtr, testselectorValues, sizeof(testselectorValues));
 			memcpy(result.doneedgePtr, dones.data(), donesSize);
@@ -2507,7 +2511,7 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 			auto* check = static_cast<uint32_t*>(result.doneedgePtr);
 
 
-			for (size_t i = 0; i < result.lineCount; i++)
+			for (size_t i = 0; i < (result.lineIndicesCPU.size() / 2); i++)
 			{
 				std::cout << "done = " << check[i] << std::endl;
 
@@ -2524,7 +2528,7 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 		void VulkanBackend::edgebuffer(Mesh& result) {
 
-			std::vector<uint32_t> edges(result.lineCount, 1);
+			std::vector<uint32_t> edges((result.lineIndicesCPU.size() / 2), 1);
 
 			std::cout << "cpu start" << std::endl;
 
@@ -2566,14 +2570,14 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 
 			std::cout << "edge size: " << edgeSize << std::endl;
-			std::cout << "edge count: " << result.lineCount << std::endl;
+			std::cout << "edge count: " << (result.lineIndicesCPU.size() / 2) << std::endl;
 
 			memcpy(result.dupedgePtr, edges.data(), edgeSize);
 
 			check = static_cast<uint32_t*>(result.dupedgePtr);
 
 
-			for (size_t i = 0; i < result.lineCount; i++)
+			for (size_t i = 0; i < (result.lineIndicesCPU.size() / 2); i++)
 			{
 				std::cout << "edge = " << check[i] << std::endl;
 
@@ -2667,7 +2671,7 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 				std::cout << "- createDescriptorSets " << std::endl;
 			}
 
-			VkDeviceSize selectorSize = (gMesh.lineCount) * sizeof(uint32_t);
+			VkDeviceSize selectorSize = (gMesh.lineIndicesCPU.size() / 2) * sizeof(uint32_t);
 
 			if (enableValidationLayers) {
 				std::cout << "-- createDescriptorSets 1" << std::endl;
@@ -3203,7 +3207,7 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 
 				//std::cout << "- predraw1" << std::endl;
-				vkCmdDrawIndexed(commandBuffer, gMesh.fillindexCount, 1, 0, 0, 0);
+				vkCmdDrawIndexed(commandBuffer, gMesh.fillIndicesCPU.size(), 1, 0, 0, 0);
 
 				//std::cout << "- prebind2" << std::endl;
 
@@ -3221,7 +3225,7 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 				//std::cout << "- predraw2" << std::endl;
 
-				vkCmdDrawIndexed(commandBuffer, gMesh.lineindexCount, 1, 0, 0, 0);
+				vkCmdDrawIndexed(commandBuffer, gMesh.lineIndicesCPU.size(), 1, 0, 0, 0);
 
 
 
@@ -3779,18 +3783,6 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 		}
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 		VkShaderModule VulkanBackend::createShaderModule(const std::vector<char>&code) {
 
 			if (enableValidationLayers) {
@@ -4185,11 +4177,6 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 			for (const auto& extension : availableExtensions) {
 				requiredExtensions.erase(extension.extensionName);
 			}
-
-
-
-
-
 			return requiredExtensions.empty();
 		}
 
@@ -4521,3 +4508,6 @@ void VulkanBackend::setsixlines(std::vector<MeshVertex>& vertices, std::vector<u
 
 
 		}
+
+
+

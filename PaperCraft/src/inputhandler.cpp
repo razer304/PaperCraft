@@ -44,6 +44,8 @@ void InputHandler::onScroll(double xoffset, double yoffset) {
     auto* backend = reinterpret_cast<InputHandler*>(glfwGetWindowUserPointer(window));
     backend->onMouseButton(button, action, mods);
 }
+
+
 void InputHandler::onMouseButton(int button, int action, int mods) {
     if (button == GLFW_MOUSE_BUTTON_LEFT) {
         if (action == GLFW_PRESS) {

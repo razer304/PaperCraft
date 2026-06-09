@@ -15,7 +15,6 @@
 #include <glm/glm.hpp>
 
 
-
 #define NOMINMAX // To prevent windows.h from defining min and max macros so that limits can define max properly
 #define VK_USE_PLATFORM_WIN32_KHR
 #define GLFW_INCLUDE_VULKAN
@@ -118,7 +117,7 @@ public:
 	struct MeshVertex {
 		glm::vec3 pos;
 		glm::vec3 normal;
-		glm::vec3 bary;
+	//	glm::vec3 bary;
 
 		static VkVertexInputBindingDescription getBindingDescription() {
 			VkVertexInputBindingDescription binding{};
@@ -128,8 +127,8 @@ public:
 			return binding;
 		}
 
-		static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions() {
-			std::array<VkVertexInputAttributeDescription, 3> attrs{};
+		static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions() {
+			std::array<VkVertexInputAttributeDescription, 2> attrs{};
 
 			// position
 			attrs[0].binding = 0;
@@ -144,10 +143,10 @@ public:
 			attrs[1].offset = offsetof(MeshVertex, normal);
 
 			// barycentric coords
-			attrs[2].binding = 0;
-			attrs[2].location = 2;
-			attrs[2].format = VK_FORMAT_R32G32B32_SFLOAT;
-			attrs[2].offset = offsetof(MeshVertex, bary);
+			//attrs[2].binding = 0;
+			//attrs[2].location = 2;
+			//attrs[2].format = VK_FORMAT_R32G32B32_SFLOAT;
+		//	attrs[2].offset = offsetof(MeshVertex, bary);
 
 
 			return attrs;
@@ -182,28 +181,10 @@ public:
 
 
 
-
-		uint32_t fillindexCount = 0;
-		uint32_t lineindexCount = 0;
-		uint32_t lineCount = 0;
-
-
-		//uint32_t* vertPtr = nullptr;
-
-		//uint32_t* fillindexPtr = nullptr;
-		//uint32_t* lineindexPtr = nullptr;
-
 		uint32_t* selectorPtr = nullptr;
 		uint32_t* dupedgePtr = nullptr;
 		uint32_t* doneedgePtr = nullptr;
 		
-
-
-
-
-		//cpu version
-		//std::vector<MeshVertex> joinedVerticesCPU;
-		//std::vector<uint32_t> joinedIndicesCPU;
 
 		std::vector<MeshVertex> VerticesCPU;
 		std::vector<uint32_t> fillIndicesCPU;
